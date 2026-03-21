@@ -18,7 +18,6 @@ C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\api.pdb
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Azure.Core.dll
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Azure.Identity.dll
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Humanizer.dll
-C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Microsoft.AspNetCore.OpenApi.dll
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Microsoft.Bcl.AsyncInterfaces.dll
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Microsoft.Build.Locator.dll
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Microsoft.CodeAnalysis.dll
@@ -161,3 +160,6 @@ C:\Users\hanan\source\repos\Barnaktiv\backend\api\obj\Debug\net9.0\refint\api.dl
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\obj\Debug\net9.0\api.pdb
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\obj\Debug\net9.0\api.genruntimeconfig.cache
 C:\Users\hanan\source\repos\Barnaktiv\backend\api\obj\Debug\net9.0\ref\api.dll
+C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Swashbuckle.AspNetCore.Swagger.dll
+C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Swashbuckle.AspNetCore.SwaggerGen.dll
+C:\Users\hanan\source\repos\Barnaktiv\backend\api\bin\Debug\net9.0\Swashbuckle.AspNetCore.SwaggerUI.dll
