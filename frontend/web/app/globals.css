@@ -1,26 +1,71 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7efe2;
+  --foreground: #243127;
+  --surface: rgba(255, 251, 245, 0.9);
+  --surface-strong: #fffdf8;
+  --muted: #607063;
+  --border: rgba(62, 79, 66, 0.14);
+  --accent: #df6937;
+  --accent-strong: #aa451e;
+  --accent-soft: #f7dccd;
+  --card-shadow: 0 24px 80px -48px rgba(36, 49, 39, 0.4);
+  --font-brand-sans: "Aptos", "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-brand-mono: "Cascadia Mono", "Consolas", monospace;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --font-sans: var(--font-brand-sans);
+  --font-mono: var(--font-brand-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92), transparent 34%),
+    radial-gradient(circle at top right, rgba(223, 105, 55, 0.18), transparent 28%),
+    linear-gradient(180deg, #f4ead8 0%, #f7efe2 40%, #f3ebdf 100%);
 }
 
 body {
-  background: var(--background);
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.72), transparent 25%),
+    radial-gradient(circle at 90% 15%, rgba(223, 105, 55, 0.14), transparent 20%),
+    linear-gradient(
+      180deg,
+      rgba(255, 248, 239, 0.72),
+      rgba(244, 237, 228, 0.94)
+    ),
+    var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-brand-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  font-family: var(--font-brand-mono);
+}
+
+::selection {
+  background: rgba(223, 105, 55, 0.28);
+  color: var(--foreground);
 }
