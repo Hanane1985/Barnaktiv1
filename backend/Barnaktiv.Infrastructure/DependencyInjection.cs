@@ -1,6 +1,8 @@
 using Barnaktiv.Application.Interfaces;
+using Barnaktiv.Infrastructure.Configuration;
 using Barnaktiv.Infrastructure.Data;
 using Barnaktiv.Infrastructure.Repositories;
+using Barnaktiv.Infrastructure.Scrapers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,7 +19,11 @@ public static class DependencyInjection
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseSqlServer(connectionString));
 
+        services.AddSingleton(new HttpClient());
         services.AddScoped<IActivityRepository, ActivityRepository>();
+        services.AddScoped<IActivityIngestionRepository, ActivityIngestionRepository>();
+        services.AddSingleton<IIngestionSourceProvider, IngestionSourceProvider>();
+        services.AddScoped<IActivityScraper, JsonFeedActivityScraper>();
 
         return services;
     }

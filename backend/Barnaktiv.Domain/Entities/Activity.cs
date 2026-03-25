@@ -4,6 +4,10 @@ namespace Barnaktiv.Domain.Entities;
 
 public class Activity : Entity
 {
+    public string SourceKey { get; set; } = string.Empty;
+
+    public string ExternalId { get; set; } = string.Empty;
+
     public string Title { get; set; } = string.Empty;
 
     public string Description { get; set; } = string.Empty;
@@ -31,4 +35,8 @@ public class Activity : Entity
     public string Source { get; set; } = string.Empty;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public DateTime? LastSeenAt { get; set; }
 }
