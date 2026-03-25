@@ -13,5 +13,10 @@ public interface IActivityIngestionRepository
 
     Task AddRawPayloadAsync(RawActivityPayload rawPayload, CancellationToken cancellationToken);
 
+    Task RemoveActivitiesNotInExternalIdsAsync(
+        string sourceKey,
+        IReadOnlyCollection<string> externalIds,
+        CancellationToken cancellationToken);
+
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }

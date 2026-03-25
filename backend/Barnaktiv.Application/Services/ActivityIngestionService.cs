@@ -21,7 +21,8 @@ public sealed class ActivityIngestionService(
                 source.Name,
                 source.ScraperKind,
                 source.EndpointUrl,
-                source.IsEnabled))
+                source.IsEnabled,
+                source.MaxPages))
             .ToList();
 
         return Task.FromResult(sources);
@@ -68,6 +69,10 @@ public sealed class ActivityIngestionService(
             {
                 errors.Add($"[{source.SourceKey}] {scrapeError}");
             }
+
+            var seenExternalIds = scrapeResult.Items
+                .Select(item => item.ExternalId)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             foreach (var item in scrapeResult.Items)
             {
@@ -136,6 +141,14 @@ public sealed class ActivityIngestionService(
 
                 await repository.AddRawPayloadAsync(rawPayload, cancellationToken);
                 payloadsStored++;
+            }
+
+            if (seenExternalIds.Count > 0 && scrapeResult.Errors.Count == 0)
+            {
+                await repository.RemoveActivitiesNotInExternalIdsAsync(
+                    source.SourceKey,
+                    seenExternalIds,
+                    cancellationToken);
             }
 
             await repository.SaveChangesAsync(cancellationToken);

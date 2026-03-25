@@ -63,6 +63,10 @@ function formatAgeRange(activity: Activity) {
     return "Age not specified";
   }
 
+  if (activity.ageTo >= 99) {
+    return `${activity.ageFrom}+ years`;
+  }
+
   if (activity.ageFrom === activity.ageTo) {
     return `${activity.ageFrom} years`;
   }

@@ -39,6 +39,24 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
         await dbContext.RawActivityPayloads.AddAsync(rawPayload, cancellationToken);
     }
 
+    public async Task RemoveActivitiesNotInExternalIdsAsync(
+        string sourceKey,
+        IReadOnlyCollection<string> externalIds,
+        CancellationToken cancellationToken)
+    {
+        var activitiesToRemove = await dbContext.Activities
+            .Where(activity => activity.SourceKey == sourceKey)
+            .Where(activity => !externalIds.Contains(activity.ExternalId))
+            .ToListAsync(cancellationToken);
+
+        if (activitiesToRemove.Count == 0)
+        {
+            return;
+        }
+
+        dbContext.Activities.RemoveRange(activitiesToRemove);
+    }
+
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         return dbContext.SaveChangesAsync(cancellationToken);

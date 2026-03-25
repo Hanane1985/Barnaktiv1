@@ -5,4 +5,5 @@ public sealed record ConfiguredIngestionSource(
     string Name,
     string ScraperKind,
     string EndpointUrl,
-    bool IsEnabled);
+    bool IsEnabled,
+    int? MaxPages = null);

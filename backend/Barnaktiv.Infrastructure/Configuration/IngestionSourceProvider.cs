@@ -17,7 +17,8 @@ public sealed class IngestionSourceProvider(IConfiguration configuration)
                 section["Name"]?.Trim() ?? string.Empty,
                 section["ScraperKind"]?.Trim() ?? string.Empty,
                 section["EndpointUrl"]?.Trim() ?? string.Empty,
-                bool.TryParse(section["IsEnabled"], out var isEnabled) && isEnabled))
+                bool.TryParse(section["IsEnabled"], out var isEnabled) && isEnabled,
+                int.TryParse(section["MaxPages"], out var maxPages) ? maxPages : null))
             .Where(source => !string.IsNullOrWhiteSpace(source.SourceKey))
             .ToList();
     }
