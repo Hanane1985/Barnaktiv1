@@ -1,3 +1,5 @@
+using Barnaktiv.Domain.Enums;
+
 namespace Barnaktiv.Application.Models.Ingestion;
 
 public sealed record ScrapedActivityItem(
@@ -15,4 +17,10 @@ public sealed record ScrapedActivityItem(
     string WebsiteUrl,
     string ImageUrl,
     string RawPayload,
-    bool IsPartial = false);
+    bool IsPartial = false,
+    string Sport = "",
+    ActivityListingType ListingType = ActivityListingType.Event,
+    RegistrationStatus RegistrationStatus = RegistrationStatus.Unknown,
+    DateTime? RegistrationOpenAt = null,
+    DateTime? RegistrationCloseAt = null,
+    string SignupUrl = "");

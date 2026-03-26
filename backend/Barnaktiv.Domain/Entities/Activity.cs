@@ -1,4 +1,5 @@
 using Barnaktiv.Domain.Common;
+using Barnaktiv.Domain.Enums;
 
 namespace Barnaktiv.Domain.Entities;
 
@@ -22,7 +23,11 @@ public class Activity : Entity
 
     public int AgeTo { get; set; }
 
+    public string Sport { get; set; } = string.Empty;
+
     public string Category { get; set; } = string.Empty;
+
+    public ActivityListingType ListingType { get; set; } = ActivityListingType.Event;
 
     public DateTime Date { get; set; }
 
@@ -30,9 +35,17 @@ public class Activity : Entity
 
     public string WebsiteUrl { get; set; } = string.Empty;
 
+    public string SignupUrl { get; set; } = string.Empty;
+
     public string ImageUrl { get; set; } = string.Empty;
 
     public string Source { get; set; } = string.Empty;
+
+    public RegistrationStatus RegistrationStatus { get; set; } = RegistrationStatus.Unknown;
+
+    public DateTime? RegistrationOpenAt { get; set; }
+
+    public DateTime? RegistrationCloseAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

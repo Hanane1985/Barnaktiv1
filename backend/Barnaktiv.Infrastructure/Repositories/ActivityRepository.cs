@@ -11,7 +11,8 @@ public sealed class ActivityRepository(ApplicationDbContext dbContext) : IActivi
     {
         return await dbContext.Activities
             .AsNoTracking()
-            .OrderBy(activity => activity.Date)
+            .OrderBy(activity => activity.RegistrationOpenAt ?? activity.Date)
+            .ThenBy(activity => activity.Date)
             .ThenBy(activity => activity.Title)
             .ToListAsync(cancellationToken);
     }

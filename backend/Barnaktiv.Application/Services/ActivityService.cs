@@ -22,11 +22,17 @@ public sealed class ActivityService(IActivityRepository repository) : IActivityS
             activity.City,
             activity.AgeFrom,
             activity.AgeTo,
+            activity.Sport,
             activity.Category,
+            activity.ListingType.ToString(),
             activity.Date,
             activity.Price,
             activity.WebsiteUrl,
+            activity.SignupUrl,
             activity.ImageUrl,
             activity.Source,
+            activity.RegistrationStatus.ToString(),
+            activity.RegistrationOpenAt,
+            activity.RegistrationCloseAt,
             activity.CreatedAt);
 }

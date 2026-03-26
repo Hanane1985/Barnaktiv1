@@ -7,12 +7,18 @@ export type Activity = {
   city: string;
   ageFrom: number;
   ageTo: number;
+  sport: string;
   category: string;
+  listingType: string;
   date: string;
   price: number;
   websiteUrl: string;
+  signupUrl: string;
   imageUrl: string;
   source: string;
+  registrationStatus: string;
+  registrationOpenAt: string | null;
+  registrationCloseAt: string | null;
   createdAt: string;
 };
 

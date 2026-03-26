@@ -7,12 +7,12 @@ import type { Activity } from "@/lib/activities";
 
 type ActivityExplorerProps = {
   activities: Activity[];
-  apiBaseUrl: string;
   errorMessage?: string;
 };
 
 type AgeGroup = "all" | "0-3" | "4-6" | "7-9" | "10-12" | "13+";
 type PriceFilter = "all" | "free" | "paid";
+type RegistrationStatus = "Unknown" | "Upcoming" | "Open" | "Closed" | "Full";
 
 const ageGroups: {
   value: AgeGroup;
@@ -52,6 +52,11 @@ const priceFormatter = new Intl.NumberFormat("sv-SE", {
   style: "currency",
   currency: "SEK",
   maximumFractionDigits: 0,
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat("sv-SE", {
+  dateStyle: "medium",
+  timeStyle: "short",
 });
 
 function formatPrice(price: number) {
@@ -107,21 +112,105 @@ function getResultSummary(count: number) {
   return `${count} activities`;
 }
 
+function formatRegistrationSummary(activity: Activity) {
+  const registrationStatus = activity.registrationStatus as RegistrationStatus;
+  const registrationOpenAt = activity.registrationOpenAt
+    ? new Date(activity.registrationOpenAt)
+    : null;
+  const registrationCloseAt = activity.registrationCloseAt
+    ? new Date(activity.registrationCloseAt)
+    : null;
+
+  switch (registrationStatus) {
+    case "Open":
+      return registrationCloseAt
+        ? `Registration open until ${dateTimeFormatter.format(registrationCloseAt)}`
+        : "Registration open now";
+    case "Upcoming":
+      return registrationOpenAt
+        ? `Registration opens ${dateTimeFormatter.format(registrationOpenAt)}`
+        : "Registration opens soon";
+    case "Closed":
+      return registrationCloseAt
+        ? `Registration closed ${dateTimeFormatter.format(registrationCloseAt)}`
+        : "Registration closed";
+    case "Full":
+      return "Currently full";
+    default:
+      return null;
+  }
+}
+
+function getRegistrationBadgeClassName(status: RegistrationStatus) {
+  switch (status) {
+    case "Open":
+      return "bg-emerald-100 text-emerald-900";
+    case "Upcoming":
+      return "bg-sky-100 text-sky-900";
+    case "Closed":
+      return "bg-stone-200 text-stone-800";
+    case "Full":
+      return "bg-amber-100 text-amber-950";
+    default:
+      return "bg-white/80 text-[color:var(--muted)]";
+  }
+}
+
+function getPrimaryLink(activity: Activity) {
+  if (activity.signupUrl) {
+    return {
+      href: activity.signupUrl,
+      label: "Register",
+    };
+  }
+
+  if (activity.websiteUrl) {
+    return {
+      href: activity.websiteUrl,
+      label: "Visit site",
+    };
+  }
+
+  return null;
+}
+
 function ActivityCard({ activity }: { activity: Activity }) {
   const activityDate = new Date(activity.date);
   const categoryLabel = activity.category || "General";
+  const sportLabel = activity.sport || null;
   const cityLabel = activity.city || "Unknown city";
   const organizerLabel = activity.organizer || "Organizer to be confirmed";
   const sourceLabel = activity.source || "Manual import";
+  const registrationStatus = activity.registrationStatus as RegistrationStatus;
+  const registrationSummary = formatRegistrationSummary(activity);
+  const primaryLink = getPrimaryLink(activity);
+  const dateLabel =
+    activity.listingType === "Program" && activity.registrationOpenAt
+      ? "Primary date"
+      : "Date";
 
   return (
     <article className="flex h-full flex-col rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5 shadow-[var(--card-shadow)] shadow-black/5">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
+            {sportLabel ? (
+              <span className="rounded-full bg-[color:var(--foreground)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--background)]">
+                {sportLabel}
+              </span>
+            ) : null}
             <span className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
               {categoryLabel}
             </span>
+            {registrationSummary ? (
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getRegistrationBadgeClassName(
+                  registrationStatus,
+                )}`}
+              >
+                {registrationStatus}
+              </span>
+            ) : null}
             <span className="rounded-full border border-[color:var(--border)] px-3 py-1 text-xs font-medium text-[color:var(--muted)]">
               {cityLabel}
             </span>
@@ -149,7 +238,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
       <dl className="mt-6 grid gap-3 text-sm text-[color:var(--foreground)] sm:grid-cols-2">
         <div className="rounded-2xl bg-white/70 px-4 py-3">
           <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            Date
+            {dateLabel}
           </dt>
           <dd className="mt-1 font-medium">{dateFormatter.format(activityDate)}</dd>
         </div>
@@ -173,6 +262,14 @@ function ActivityCard({ activity }: { activity: Activity }) {
           </dt>
           <dd className="mt-1 font-medium">{formatPrice(activity.price)}</dd>
         </div>
+        {registrationSummary ? (
+          <div className="rounded-2xl bg-white/70 px-4 py-3 sm:col-span-2">
+            <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+              Registration
+            </dt>
+            <dd className="mt-1 font-medium">{registrationSummary}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-[color:var(--muted)]">
@@ -185,14 +282,14 @@ function ActivityCard({ activity }: { activity: Activity }) {
         <p className="text-sm text-[color:var(--muted)]">
           Added {new Date(activity.createdAt).toLocaleDateString("sv-SE")}
         </p>
-        {activity.websiteUrl ? (
+        {primaryLink ? (
           <Link
-            href={activity.websiteUrl}
+            href={primaryLink.href}
             target="_blank"
             rel="noreferrer"
             className="rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)]"
           >
-            Visit site
+            {primaryLink.label}
           </Link>
         ) : null}
       </div>
@@ -202,11 +299,11 @@ function ActivityCard({ activity }: { activity: Activity }) {
 
 export function ActivityExplorer({
   activities,
-  apiBaseUrl,
   errorMessage,
 }: ActivityExplorerProps) {
   const [search, setSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
+  const [selectedSport, setSelectedSport] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup>("all");
   const [selectedPrice, setSelectedPrice] = useState<PriceFilter>("all");
@@ -214,6 +311,9 @@ export function ActivityExplorer({
   const searchTerm = deferredSearch.trim().toLowerCase();
 
   const cities = Array.from(new Set(activities.map((activity) => activity.city).filter(Boolean))).sort(
+    (left, right) => left.localeCompare(right),
+  );
+  const sports = Array.from(new Set(activities.map((activity) => activity.sport).filter(Boolean))).sort(
     (left, right) => left.localeCompare(right),
   );
   const categories = Array.from(
@@ -229,6 +329,7 @@ export function ActivityExplorer({
         activity.organizer,
         activity.location,
         activity.city,
+        activity.sport,
         activity.category,
       ]
         .join(" ")
@@ -236,6 +337,7 @@ export function ActivityExplorer({
         .includes(searchTerm);
 
     const matchesCity = selectedCity === "all" || activity.city === selectedCity;
+    const matchesSport = selectedSport === "all" || activity.sport === selectedSport;
     const matchesCategory =
       selectedCategory === "all" || activity.category === selectedCategory;
     const matchesPrice =
@@ -245,6 +347,7 @@ export function ActivityExplorer({
     return (
       matchesSearch &&
       matchesCity &&
+      matchesSport &&
       matchesCategory &&
       matchesPrice &&
       matchesAgeGroup(activity, selectedAgeGroup)
@@ -254,6 +357,7 @@ export function ActivityExplorer({
   const clearFilters = () => {
     setSearch("");
     setSelectedCity("all");
+    setSelectedSport("all");
     setSelectedCategory("all");
     setSelectedAgeGroup("all");
     setSelectedPrice("all");
@@ -332,7 +436,7 @@ export function ActivityExplorer({
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_repeat(4,minmax(0,1fr))]">
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_repeat(5,minmax(0,1fr))]">
           <label className="space-y-2">
             <span className="text-sm font-medium text-[color:var(--foreground)]">Search</span>
             <input
@@ -354,6 +458,22 @@ export function ActivityExplorer({
               {cities.map((city) => (
                 <option key={city} value={city}>
                   {city}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-[color:var(--foreground)]">Sport</span>
+            <select
+              value={selectedSport}
+              onChange={(event) => setSelectedSport(event.target.value)}
+              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
+            >
+              <option value="all">All sports</option>
+              {sports.map((sport) => (
+                <option key={sport} value={sport}>
+                  {sport}
                 </option>
               ))}
             </select>

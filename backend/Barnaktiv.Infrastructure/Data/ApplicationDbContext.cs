@@ -21,6 +21,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             builder.Property(activity => activity.ExternalId)
                 .HasMaxLength(240);
 
+            builder.Property(activity => activity.Sport)
+                .HasMaxLength(80);
+
+            builder.Property(activity => activity.SignupUrl)
+                .HasMaxLength(1000);
+
+            builder.Property(activity => activity.ListingType)
+                .HasConversion<string>()
+                .HasMaxLength(40);
+
+            builder.Property(activity => activity.RegistrationStatus)
+                .HasConversion<string>()
+                .HasMaxLength(40);
+
             builder.HasIndex(activity => new { activity.SourceKey, activity.ExternalId })
                 .IsUnique()
                 .HasFilter("[SourceKey] <> N'' AND [ExternalId] <> N''");

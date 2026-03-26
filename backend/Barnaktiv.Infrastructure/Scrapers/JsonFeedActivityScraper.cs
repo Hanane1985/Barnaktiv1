@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Barnaktiv.Application.Interfaces;
 using Barnaktiv.Application.Models.Ingestion;
+using Barnaktiv.Domain.Enums;
 
 namespace Barnaktiv.Infrastructure.Scrapers;
 
@@ -154,7 +155,14 @@ public sealed class JsonFeedActivityScraper(HttpClient httpClient) : IActivitySc
             price,
             GetString(itemElement, "websiteUrl", "url") ?? string.Empty,
             GetString(itemElement, "imageUrl", "image") ?? string.Empty,
-            itemElement.GetRawText());
+            itemElement.GetRawText(),
+            false,
+            GetString(itemElement, "sport") ?? string.Empty,
+            GetEnum(itemElement, ActivityListingType.Event, "listingType"),
+            GetEnum(itemElement, RegistrationStatus.Unknown, "registrationStatus"),
+            GetDate(itemElement, "registrationOpenAt", "signupOpenAt"),
+            GetDate(itemElement, "registrationCloseAt", "signupCloseAt"),
+            GetString(itemElement, "signupUrl", "registrationUrl") ?? string.Empty);
 
         error = string.Empty;
         return true;
@@ -270,6 +278,48 @@ public sealed class JsonFeedActivityScraper(HttpClient httpClient) : IActivitySc
                 bool.TryParse(value.GetString(), out var boolValue))
             {
                 return boolValue;
+            }
+        }
+
+        return null;
+    }
+
+    private static TEnum GetEnum<TEnum>(
+        JsonElement element,
+        TEnum defaultValue,
+        params string[] names)
+        where TEnum : struct, Enum
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String &&
+                Enum.TryParse<TEnum>(value.GetString(), true, out var parsedValue))
+            {
+                return parsedValue;
+            }
+        }
+
+        return defaultValue;
+    }
+
+    private static DateTime? GetDate(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String &&
+                TryParseDate(value.GetString(), out var parsedDate))
+            {
+                return parsedDate;
             }
         }
 

@@ -4,6 +4,7 @@ using Barnaktiv.Application.DTOs.Ingestion;
 using Barnaktiv.Application.Interfaces;
 using Barnaktiv.Application.Models.Ingestion;
 using Barnaktiv.Domain.Entities;
+using Barnaktiv.Domain.Enums;
 
 namespace Barnaktiv.Application.Services;
 
@@ -163,7 +164,19 @@ public sealed class ActivityIngestionService(
         activity.Title = PreferIncoming(item.Title, activity.Title);
         activity.Organizer = PreferIncoming(item.Organizer, activity.Organizer);
         activity.WebsiteUrl = PreferIncoming(item.WebsiteUrl, activity.WebsiteUrl);
+        activity.SignupUrl = PreferIncoming(item.SignupUrl, activity.SignupUrl);
         activity.ImageUrl = PreferIncoming(item.ImageUrl, activity.ImageUrl);
+        activity.Sport = PreferIncoming(item.Sport, activity.Sport);
+        activity.ListingType = item.ListingType;
+        activity.RegistrationStatus = PreferIncoming(
+            item.RegistrationStatus,
+            activity.RegistrationStatus);
+        activity.RegistrationOpenAt = PreferIncoming(
+            item.RegistrationOpenAt,
+            activity.RegistrationOpenAt);
+        activity.RegistrationCloseAt = PreferIncoming(
+            item.RegistrationCloseAt,
+            activity.RegistrationCloseAt);
 
         if (item.IsPartial)
         {
@@ -227,5 +240,19 @@ public sealed class ActivityIngestionService(
         return string.IsNullOrWhiteSpace(current)
             ? incoming.Trim()
             : current;
+    }
+
+    private static RegistrationStatus PreferIncoming(
+        RegistrationStatus incoming,
+        RegistrationStatus current)
+    {
+        return incoming == RegistrationStatus.Unknown
+            ? current
+            : incoming;
+    }
+
+    private static DateTime? PreferIncoming(DateTime? incoming, DateTime? current)
+    {
+        return incoming ?? current;
     }
 }
