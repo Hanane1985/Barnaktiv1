@@ -12,6 +12,8 @@ public sealed class ActivityIngestionService(
     IEnumerable<IActivityScraper> scrapers,
     IActivityIngestionRepository repository) : IActivityIngestionService
 {
+    private const int SaveBatchSize = 100;
+
     public Task<IReadOnlyList<IngestionSourceDto>> GetSourcesAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<IngestionSourceDto> sources = sourceProvider
@@ -70,9 +72,11 @@ public sealed class ActivityIngestionService(
                 errors.Add($"[{source.SourceKey}] {scrapeError}");
             }
 
-            var seenExternalIds = scrapeResult.Items
-                .Select(item => item.ExternalId)
+            var seenExternalIds = (scrapeResult.DiscoveredExternalIds ?? scrapeResult.Items
+                    .Select(item => item.ExternalId)
+                    .ToList())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var pendingChanges = 0;
 
             foreach (var item in scrapeResult.Items)
             {
@@ -88,41 +92,20 @@ public sealed class ActivityIngestionService(
                     {
                         SourceKey = source.SourceKey,
                         ExternalId = item.ExternalId,
-                        Title = item.Title,
-                        Description = item.Description,
-                        Organizer = item.Organizer,
-                        Location = item.Location,
-                        City = item.City,
-                        AgeFrom = item.AgeFrom,
-                        AgeTo = item.AgeTo,
-                        Category = item.Category,
-                        Date = item.Date,
-                        Price = item.Price,
-                        WebsiteUrl = item.WebsiteUrl,
-                        ImageUrl = item.ImageUrl,
-                        Source = source.Name,
                         CreatedAt = now,
-                        UpdatedAt = now,
-                        LastSeenAt = now,
                     };
+
+                    ApplyItem(activity, item);
+                    activity.Source = source.Name;
+                    activity.UpdatedAt = now;
+                    activity.LastSeenAt = now;
 
                     await repository.AddActivityAsync(activity, cancellationToken);
                     activitiesCreated++;
                 }
                 else
                 {
-                    existingActivity.Title = item.Title;
-                    existingActivity.Description = item.Description;
-                    existingActivity.Organizer = item.Organizer;
-                    existingActivity.Location = item.Location;
-                    existingActivity.City = item.City;
-                    existingActivity.AgeFrom = item.AgeFrom;
-                    existingActivity.AgeTo = item.AgeTo;
-                    existingActivity.Category = item.Category;
-                    existingActivity.Date = item.Date;
-                    existingActivity.Price = item.Price;
-                    existingActivity.WebsiteUrl = item.WebsiteUrl;
-                    existingActivity.ImageUrl = item.ImageUrl;
+                    ApplyItem(existingActivity, item);
                     existingActivity.Source = source.Name;
                     existingActivity.UpdatedAt = now;
                     existingActivity.LastSeenAt = now;
@@ -141,9 +124,16 @@ public sealed class ActivityIngestionService(
 
                 await repository.AddRawPayloadAsync(rawPayload, cancellationToken);
                 payloadsStored++;
+                pendingChanges++;
+
+                if (pendingChanges >= SaveBatchSize)
+                {
+                    await repository.SaveChangesAsync(cancellationToken);
+                    pendingChanges = 0;
+                }
             }
 
-            if (seenExternalIds.Count > 0 && scrapeResult.Errors.Count == 0)
+            if (seenExternalIds.Count > 0 && scrapeResult.CanRemoveMissingActivities)
             {
                 await repository.RemoveActivitiesNotInExternalIdsAsync(
                     source.SourceKey,
@@ -151,7 +141,10 @@ public sealed class ActivityIngestionService(
                     cancellationToken);
             }
 
-            await repository.SaveChangesAsync(cancellationToken);
+            if (pendingChanges > 0 || (seenExternalIds.Count > 0 && scrapeResult.CanRemoveMissingActivities))
+            {
+                await repository.SaveChangesAsync(cancellationToken);
+            }
         }
 
         return new IngestionRunDto(
@@ -165,10 +158,74 @@ public sealed class ActivityIngestionService(
             errors);
     }
 
+    private static void ApplyItem(Activity activity, ScrapedActivityItem item)
+    {
+        activity.Title = PreferIncoming(item.Title, activity.Title);
+        activity.Organizer = PreferIncoming(item.Organizer, activity.Organizer);
+        activity.WebsiteUrl = PreferIncoming(item.WebsiteUrl, activity.WebsiteUrl);
+        activity.ImageUrl = PreferIncoming(item.ImageUrl, activity.ImageUrl);
+
+        if (item.IsPartial)
+        {
+            activity.Description = FillIfMissing(activity.Description, item.Description);
+            activity.Location = FillIfMissing(activity.Location, item.Location);
+            activity.City = FillIfMissing(activity.City, item.City);
+            activity.Category = FillIfMissing(activity.Category, item.Category);
+
+            if (activity.Date == default && item.Date != default)
+            {
+                activity.Date = item.Date;
+            }
+
+            if (activity.Price == default || item.Price > 0m)
+            {
+                activity.Price = item.Price;
+            }
+
+            if ((activity.AgeFrom == 0 && activity.AgeTo == 0) ||
+                item.AgeFrom > 0 ||
+                item.AgeTo > 0)
+            {
+                activity.AgeFrom = item.AgeFrom;
+                activity.AgeTo = item.AgeTo;
+            }
+
+            return;
+        }
+
+        activity.Description = PreferIncoming(item.Description, activity.Description);
+        activity.Location = PreferIncoming(item.Location, activity.Location);
+        activity.City = PreferIncoming(item.City, activity.City);
+        activity.Category = PreferIncoming(item.Category, activity.Category);
+
+        if (item.Date != default)
+        {
+            activity.Date = item.Date;
+        }
+
+        activity.Price = item.Price;
+        activity.AgeFrom = item.AgeFrom;
+        activity.AgeTo = item.AgeTo;
+    }
+
     private static string ComputeHash(string payload)
     {
         var bytes = Encoding.UTF8.GetBytes(payload);
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash);
+    }
+
+    private static string PreferIncoming(string incoming, string current)
+    {
+        return string.IsNullOrWhiteSpace(incoming)
+            ? current
+            : incoming.Trim();
+    }
+
+    private static string FillIfMissing(string current, string incoming)
+    {
+        return string.IsNullOrWhiteSpace(current)
+            ? incoming.Trim()
+            : current;
     }
 }

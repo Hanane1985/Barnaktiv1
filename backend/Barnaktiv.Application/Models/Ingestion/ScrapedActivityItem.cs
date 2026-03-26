@@ -14,4 +14,5 @@ public sealed record ScrapedActivityItem(
     decimal Price,
     string WebsiteUrl,
     string ImageUrl,
-    string RawPayload);
+    string RawPayload,
+    bool IsPartial = false);

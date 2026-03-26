@@ -63,7 +63,11 @@ public sealed class JsonFeedActivityScraper(HttpClient httpClient) : IActivitySc
             errors.Add($"Item {index}: {error}");
         }
 
-        return new ScrapeResult(items, errors);
+        return new ScrapeResult(
+            items,
+            errors,
+            items.Select(item => item.ExternalId).ToList(),
+            errors.Count == 0);
     }
 
     private static bool TryResolveItemsArray(JsonElement rootElement, out JsonElement itemsElement)

@@ -11,12 +11,28 @@ namespace Barnaktiv.Infrastructure.Scrapers;
 public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IActivityScraper
 {
     private const int AbsoluteMaxPages = 200;
-    private const int DetailRequestConcurrency = 6;
+    private const int DetailRequestConcurrency = 3;
+    private const int RequestAttemptCount = 3;
+    private const string ActivityCardMarker =
+        "<div class=\"o-grid__column o-grid__column--stretch\" data-size=\"4/4 4/8@m 4/12@l\" data-testid=\"kalendarium-activity\">";
 
     private static readonly Uri BaseUri = new("https://goteborg.se");
+    private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
     private static readonly Regex ActivityLinkRegex = new(
         "<a class=\"c-card__title-link\"[^>]*href=\"(?<href>[^\"]+)\"",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex CardTitleLinkRegex = new(
+        "<a class=\"c-card__title-link\"[^>]*href=\"(?<href>[^\"]+)\"[^>]*>(?<title>.*?)</a>",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex CardBylineRegex = new(
+        "<span class=\"c-card__byline\">(?<value>.*?)</span>",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex CardImageRegex = new(
+        "<img class=\"c-image__image\"[^>]*src=\"(?<src>[^\"]+)\"",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex CardLabelValueRegex = new(
+        "<dt[^>]*>(?<label>.*?)</dt><dd[^>]*>(?<value>.*?)</dd>",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex PageLinkRegex = new(
         @"[?&]page=(?<page>\d+)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
@@ -33,14 +49,31 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
         @"(?<amount>\d+(?:[.,]\d+)?)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex AgeRangeRegex = new(
-        @"(?<!\d)(?<from>\d{1,2})\s*(?:-|\u2013|\u2014|till|to)\s*(?<to>\d{1,2})\s*\u00E5r(?!\d)",
+        @"(?<!\d)(?<from>\d{1,2})\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2212|till|to)\s*(?<to>\d{1,2})\s*(?:\u00E5r|yrs?|years?)(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex AgeFromRegex = new(
-        @"(?:fr\u00E5n|from)\s*(?<from>\d{1,2})\s*\u00E5r|(?<!\d)(?<from>\d{1,2})\s*\+\s*\u00E5r(?!\d)",
+        @"(?:fr\u00E5n|from)\s*(?<from>\d{1,2})\s*(?:\u00E5r|yrs?|years?)|(?<!\d)(?<from>\d{1,2})\s*\+\s*(?:\u00E5r|yrs?|years?)(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex AgeSingleRegex = new(
-        @"(?:f\u00F6r\s+(?:dig|barn(?:en)?|ungdom(?:ar)?))\s*(?<age>\d{1,2})\s*\u00E5r|(?<!\d)(?<age>\d{1,2})-\u00E5r(?:ing|ingar)(?!\w)",
+        @"(?:f\u00F6r\s+(?:dig|barn(?:en)?|ungdom(?:ar)?))\s*:?\s*(?<age>\d{1,2})\s*(?:\u00E5r|yrs?|years?)|(?<!\d)(?<age>\d{1,2})-\u00E5r(?:ing|ingar)(?!\w)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex GradeRangeRegex = new(
+        @"(?:\u00E5rskurs|klass|grade)\s*(?<from>\d{1,2})\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2212|till|to)\s*(?<to>\d{1,2})(?!\d)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex GradeFromRegex = new(
+        @"(?:\u00E5rskurs|klass|grade)\s*(?<from>\d{1,2})\s*(?:\+|och upp\u00E5t|and up)(?!\d)",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly string[] ListDateFormats =
+    [
+        "dddd d MMMM",
+        "dddd dd MMMM",
+        "d MMMM",
+        "dd MMMM",
+        "dddd d MMM",
+        "dddd dd MMM",
+        "d MMM",
+        "dd MMM"
+    ];
 
     public string Kind => "goteborg-kalendarium-html-v1";
 
@@ -55,35 +88,38 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
 
         var errors = new ConcurrentBag<string>();
         var items = new ConcurrentBag<ScrapedActivityItem>();
-        var detailUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var cardFallbacksByDetailUrl = new Dictionary<string, ListCardFallback>(
+            StringComparer.OrdinalIgnoreCase);
+        var discoveredExternalIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var configuredMaxPages = source.MaxPages.GetValueOrDefault();
         var pageCount = configuredMaxPages > 0
             ? Math.Clamp(configuredMaxPages, 1, AbsoluteMaxPages)
             : AbsoluteMaxPages;
+        var hasListPageErrors = false;
 
         for (var page = 0; page < pageCount; page++)
         {
             var pageUrl = BuildPageUrl(source.EndpointUrl, page);
-            string listHtml;
+            var listPageResult = await GetPageHtmlAsync(pageUrl, cancellationToken);
 
-            try
+            if (!listPageResult.IsSuccess)
             {
-                listHtml = await httpClient.GetStringAsync(pageUrl, cancellationToken);
-            }
-            catch (Exception exception)
-            {
-                errors.Add($"Failed to fetch list page {page + 1}: {exception.Message}");
+                hasListPageErrors = true;
+                errors.Add(
+                    $"Failed to fetch list page {page + 1}: {listPageResult.ErrorMessage}");
                 continue;
             }
+
+            var listHtml = listPageResult.Content!;
 
             if (page == 0 && source.MaxPages is null)
             {
                 pageCount = DetectPageCount(listHtml) ?? pageCount;
             }
 
-            var matches = ActivityLinkRegex.Matches(listHtml);
+            var cardFallbacks = ExtractListCardFallbacks(listHtml);
 
-            if (matches.Count == 0)
+            if (cardFallbacks.Count == 0)
             {
                 if (page == 0)
                 {
@@ -95,16 +131,11 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
 
             var linksAddedOnPage = 0;
 
-            foreach (Match match in matches)
+            foreach (var cardFallback in cardFallbacks)
             {
-                var relativeHref = WebUtility.HtmlDecode(match.Groups["href"].Value);
+                discoveredExternalIds.Add(cardFallback.ExternalId);
 
-                if (string.IsNullOrWhiteSpace(relativeHref))
-                {
-                    continue;
-                }
-
-                if (detailUrls.Add(new Uri(BaseUri, relativeHref).ToString()))
+                if (cardFallbacksByDetailUrl.TryAdd(cardFallback.DetailUrl, cardFallback))
                 {
                     linksAddedOnPage++;
                 }
@@ -117,21 +148,34 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
         }
 
         await Parallel.ForEachAsync(
-            detailUrls,
+            cardFallbacksByDetailUrl,
             new ParallelOptions
             {
                 MaxDegreeOfParallelism = DetailRequestConcurrency,
                 CancellationToken = cancellationToken
             },
-            async (detailUrl, ct) =>
+            async (entry, ct) =>
             {
+                var detailUrl = entry.Key;
+                var cardFallback = entry.Value;
+                var detailPageResult = await GetPageHtmlAsync(detailUrl, ct);
+
+                if (!detailPageResult.IsSuccess)
+                {
+                    items.Add(CreateFallbackItem(cardFallback));
+                    errors.Add(
+                        $"Failed to fetch detail page '{detailUrl}': {detailPageResult.ErrorMessage}. Imported list-card fallback instead.");
+                    return;
+                }
+
                 try
                 {
-                    var detailHtml = await httpClient.GetStringAsync(detailUrl, ct);
+                    var detailHtml = detailPageResult.Content!;
 
                     if (!TryParseDetail(detailUrl, detailHtml, out var item, out var error))
                     {
-                        errors.Add(error);
+                        items.Add(CreateFallbackItem(cardFallback));
+                        errors.Add($"{error} Imported list-card fallback instead.");
                         return;
                     }
 
@@ -139,11 +183,66 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
                 }
                 catch (Exception exception)
                 {
-                    errors.Add($"Failed to fetch detail page '{detailUrl}': {exception.Message}");
+                    items.Add(CreateFallbackItem(cardFallback));
+                    errors.Add(
+                        $"Failed to parse detail page '{detailUrl}': {exception.Message}. Imported list-card fallback instead.");
                 }
             });
 
-        return new ScrapeResult(items.ToList(), errors.ToList());
+        return new ScrapeResult(
+            items.ToList(),
+            errors.ToList(),
+            discoveredExternalIds.ToList(),
+            !hasListPageErrors && discoveredExternalIds.Count > 0);
+    }
+
+    private async Task<PageFetchResult> GetPageHtmlAsync(string url, CancellationToken cancellationToken)
+    {
+        string? errorMessage = null;
+
+        for (var attempt = 1; attempt <= RequestAttemptCount; attempt++)
+        {
+            try
+            {
+                using var response = await httpClient.GetAsync(url, cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return new PageFetchResult(
+                        true,
+                        await response.Content.ReadAsStringAsync(cancellationToken),
+                        null);
+                }
+
+                errorMessage = $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+
+                if (!ShouldRetry(response.StatusCode) || attempt == RequestAttemptCount)
+                {
+                    break;
+                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                errorMessage = "The request timed out.";
+            }
+            catch (HttpRequestException exception)
+            {
+                errorMessage = exception.Message;
+
+                if (exception.StatusCode is { } statusCode &&
+                    !ShouldRetry(statusCode))
+                {
+                    break;
+                }
+            }
+
+            if (attempt < RequestAttemptCount)
+            {
+                await Task.Delay(GetRetryDelay(attempt), cancellationToken);
+            }
+        }
+
+        return new PageFetchResult(false, null, errorMessage ?? "Unknown request error.");
     }
 
     private static string BuildPageUrl(string endpointUrl, int page)
@@ -162,6 +261,164 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
         return endpointUrl.Contains('?')
             ? $"{endpointUrl}&{pageParameter}"
             : $"{endpointUrl}?{pageParameter}";
+    }
+
+    private static string? TryExtractActivityId(string url)
+    {
+        var activityIdMatch = Regex.Match(
+            url,
+            @"[?&]activityId=(?<id>[0-9a-fA-F\-]+)",
+            RegexOptions.CultureInvariant);
+
+        return activityIdMatch.Success
+            ? activityIdMatch.Groups["id"].Value
+            : null;
+    }
+
+    private static IReadOnlyList<ListCardFallback> ExtractListCardFallbacks(string listHtml)
+    {
+        var segments = listHtml.Split(ActivityCardMarker, StringSplitOptions.None);
+        var fallbacks = new List<ListCardFallback>();
+
+        for (var i = 1; i < segments.Length; i++)
+        {
+            var fallback = TryParseListCard(segments[i]);
+
+            if (fallback is not null)
+            {
+                fallbacks.Add(fallback);
+            }
+        }
+
+        if (fallbacks.Count == 0)
+        {
+            foreach (Match match in ActivityLinkRegex.Matches(listHtml))
+            {
+                var relativeHref = WebUtility.HtmlDecode(match.Groups["href"].Value);
+                var externalId = TryExtractActivityId(relativeHref);
+
+                if (string.IsNullOrWhiteSpace(relativeHref) || string.IsNullOrWhiteSpace(externalId))
+                {
+                    continue;
+                }
+
+                fallbacks.Add(new ListCardFallback(
+                    externalId,
+                    new Uri(BaseUri, relativeHref).ToString(),
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty));
+            }
+        }
+
+        return fallbacks;
+    }
+
+    private static ListCardFallback? TryParseListCard(string cardHtml)
+    {
+        var titleLinkMatch = CardTitleLinkRegex.Match(cardHtml);
+
+        if (!titleLinkMatch.Success)
+        {
+            return null;
+        }
+
+        var relativeHref = WebUtility.HtmlDecode(titleLinkMatch.Groups["href"].Value);
+        var externalId = TryExtractActivityId(relativeHref);
+
+        if (string.IsNullOrWhiteSpace(relativeHref) || string.IsNullOrWhiteSpace(externalId))
+        {
+            return null;
+        }
+
+        var title = StripHtml(titleLinkMatch.Groups["title"].Value).Trim();
+
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return null;
+        }
+
+        var organizer = CardBylineRegex.Match(cardHtml) is { Success: true } bylineMatch
+            ? StripHtml(bylineMatch.Groups["value"].Value).Trim()
+            : string.Empty;
+        var imageUrl = CardImageRegex.Match(cardHtml) is { Success: true } imageMatch
+            ? WebUtility.HtmlDecode(imageMatch.Groups["src"].Value).Trim()
+            : string.Empty;
+        var startDateText = string.Empty;
+        var endDateText = string.Empty;
+        var timeText = string.Empty;
+
+        foreach (Match labelValueMatch in CardLabelValueRegex.Matches(cardHtml))
+        {
+            var label = StripHtml(labelValueMatch.Groups["label"].Value).Trim();
+            var value = StripHtml(labelValueMatch.Groups["value"].Value).Trim();
+
+            switch (label)
+            {
+                case "Datum":
+                case "Börjar":
+                    startDateText = value;
+                    break;
+                case "Slutar":
+                    endDateText = value;
+                    break;
+                case "Tid":
+                    timeText = value;
+                    break;
+            }
+        }
+
+        return new ListCardFallback(
+            externalId,
+            new Uri(BaseUri, relativeHref).ToString(),
+            title,
+            organizer,
+            imageUrl,
+            startDateText,
+            endDateText,
+            timeText,
+            cardHtml);
+    }
+
+    private static ScrapedActivityItem CreateFallbackItem(ListCardFallback cardFallback)
+    {
+        var description = BuildFallbackDescription(cardFallback);
+        var (ageFrom, ageTo) = InferAgeRange(cardFallback.Title, description, []);
+        var date = ResolveFallbackDate(cardFallback);
+
+        var rawPayload = JsonSerializer.Serialize(new
+        {
+            kind = "goteborg-kalendarium-list-card-fallback",
+            cardFallback.ExternalId,
+            cardFallback.DetailUrl,
+            cardFallback.Title,
+            cardFallback.Organizer,
+            cardFallback.ImageUrl,
+            cardFallback.StartDateText,
+            cardFallback.EndDateText,
+            cardFallback.TimeText
+        });
+
+        return new ScrapedActivityItem(
+            cardFallback.ExternalId,
+            cardFallback.Title,
+            description,
+            cardFallback.Organizer,
+            string.Empty,
+            "Goteborg",
+            ageFrom,
+            ageTo,
+            "Kalendarium",
+            date,
+            0m,
+            cardFallback.DetailUrl,
+            cardFallback.ImageUrl,
+            rawPayload,
+            true);
     }
 
     private static bool TryParseDetail(
@@ -235,6 +492,48 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
 
         error = string.Empty;
         return true;
+    }
+
+    private static string BuildFallbackDescription(ListCardFallback cardFallback)
+    {
+        var descriptionParts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(cardFallback.Organizer))
+        {
+            descriptionParts.Add($"Arrangör: {cardFallback.Organizer}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(cardFallback.StartDateText))
+        {
+            descriptionParts.Add($"Datum: {cardFallback.StartDateText}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(cardFallback.EndDateText))
+        {
+            descriptionParts.Add($"Slutar: {cardFallback.EndDateText}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(cardFallback.TimeText))
+        {
+            descriptionParts.Add($"Tid: {cardFallback.TimeText}");
+        }
+
+        return string.Join(" ", descriptionParts);
+    }
+
+    private static DateTime ResolveFallbackDate(ListCardFallback cardFallback)
+    {
+        if (TryParseListDate(cardFallback.StartDateText, out var parsedDate))
+        {
+            return parsedDate;
+        }
+
+        if (TryParseListDate(cardFallback.EndDateText, out parsedDate))
+        {
+            return parsedDate;
+        }
+
+        return DateTime.Today;
     }
 
     private static int? DetectPageCount(string listHtml)
@@ -356,9 +655,35 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             return (0, 3);
         }
 
+        if (normalizedText.Contains("alla \u00E5ldrar", StringComparison.Ordinal) ||
+            normalizedText.Contains("alla aldrar", StringComparison.Ordinal))
+        {
+            return (0, 99);
+        }
+
         if (normalizedText.Contains("f\u00F6rskol", StringComparison.Ordinal))
         {
             return (3, 5);
+        }
+
+        if (normalizedText.Contains("mellanstad", StringComparison.Ordinal))
+        {
+            return (10, 12);
+        }
+
+        if (normalizedText.Contains("l\u00E5gstad", StringComparison.Ordinal))
+        {
+            return (7, 9);
+        }
+
+        if (normalizedText.Contains("h\u00F6gstad", StringComparison.Ordinal))
+        {
+            return (13, 15);
+        }
+
+        if (normalizedText.Contains("gymnas", StringComparison.Ordinal))
+        {
+            return (16, 19);
         }
 
         if (normalizedText.Contains("familj", StringComparison.Ordinal))
@@ -440,7 +765,83 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
 
         ageFrom = 0;
         ageTo = 0;
+
+        var gradeRangeMatch = GradeRangeRegex.Match(input);
+
+        if (gradeRangeMatch.Success &&
+            int.TryParse(gradeRangeMatch.Groups["from"].Value, out var gradeFrom) &&
+            int.TryParse(gradeRangeMatch.Groups["to"].Value, out var gradeTo))
+        {
+            ageFrom = GradeToApproximateAge(gradeFrom);
+            ageTo = GradeToApproximateAge(gradeTo);
+            return NormalizeAgeRange(ref ageFrom, ref ageTo);
+        }
+
+        var gradeFromMatch = GradeFromRegex.Match(input);
+
+        if (gradeFromMatch.Success &&
+            int.TryParse(gradeFromMatch.Groups["from"].Value, out gradeFrom))
+        {
+            ageFrom = GradeToApproximateAge(gradeFrom);
+            ageTo = 25;
+            return NormalizeAgeRange(ref ageFrom, ref ageTo);
+        }
+
         return false;
+    }
+
+    private static bool TryParseListDate(string input, out DateTime date)
+    {
+        var normalizedInput = NormalizeWhitespace(StripHtml(input))
+            .Trim()
+            .TrimEnd('.', ',');
+
+        if (string.IsNullOrWhiteSpace(normalizedInput))
+        {
+            date = default;
+            return false;
+        }
+
+        var referenceDate = DateTime.Today;
+        var candidates = new HashSet<DateTime>();
+
+        if (DateTime.TryParse(
+                normalizedInput,
+                SwedishCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out var parsedWithYear) &&
+            parsedWithYear.Year > 1900)
+        {
+            candidates.Add(parsedWithYear.Date);
+        }
+
+        for (var year = referenceDate.Year - 1; year <= referenceDate.Year + 1; year++)
+        {
+            foreach (var format in ListDateFormats)
+            {
+                if (DateTime.TryParseExact(
+                        $"{normalizedInput} {year}",
+                        $"{format} yyyy",
+                        SwedishCulture,
+                        DateTimeStyles.AllowWhiteSpaces,
+                        out var parsedCandidate))
+                {
+                    candidates.Add(parsedCandidate.Date);
+                }
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            date = default;
+            return false;
+        }
+
+        date = candidates
+            .OrderBy(candidate => Math.Abs((candidate - referenceDate).TotalDays))
+            .ThenBy(candidate => candidate)
+            .First();
+        return true;
     }
 
     private static bool NormalizeAgeRange(ref int ageFrom, ref int ageTo)
@@ -461,6 +862,11 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
         return true;
     }
 
+    private static int GradeToApproximateAge(int grade)
+    {
+        return Math.Clamp(grade + 6, 0, 99);
+    }
+
     private static string StripHtml(string value)
     {
         var withoutTags = HtmlTagRegex.Replace(value, " ");
@@ -469,6 +875,11 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             .Replace("\r", " ", StringComparison.Ordinal)
             .Replace("\n", " ", StringComparison.Ordinal)
             .Trim();
+    }
+
+    private static string NormalizeWhitespace(string value)
+    {
+        return Regex.Replace(value, @"\s+", " ", RegexOptions.CultureInvariant);
     }
 
     private static decimal TryExtractPrice(string detailHtml, bool isFree)
@@ -508,4 +919,32 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             ? amount
             : 0m;
     }
+
+    private static bool ShouldRetry(HttpStatusCode statusCode)
+    {
+        return statusCode == HttpStatusCode.RequestTimeout ||
+               statusCode == HttpStatusCode.TooManyRequests ||
+               (int)statusCode >= 500;
+    }
+
+    private static TimeSpan GetRetryDelay(int attempt)
+    {
+        return TimeSpan.FromMilliseconds(300 * attempt * attempt);
+    }
+
+    private sealed record ListCardFallback(
+        string ExternalId,
+        string DetailUrl,
+        string Title,
+        string Organizer,
+        string ImageUrl,
+        string StartDateText,
+        string EndDateText,
+        string TimeText,
+        string RawHtml);
+
+    private sealed record PageFetchResult(
+        bool IsSuccess,
+        string? Content,
+        string? ErrorMessage);
 }
