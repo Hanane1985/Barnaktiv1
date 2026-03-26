@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddSingleton<IIngestionSourceProvider, IngestionSourceProvider>();
         services.AddScoped<IActivityScraper, JsonFeedActivityScraper>();
         services.AddScoped<IActivityScraper, GoteborgKalendariumHtmlScraper>();
+        services.AddScoped<IActivityScraper, BKHackenStartPlayingScraper>();
 
         return services;
     }
