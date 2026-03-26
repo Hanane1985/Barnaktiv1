@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Barnaktiv.Application.Interfaces;
@@ -45,7 +46,15 @@ public sealed partial class BKHackenStartPlayingScraper(HttpClient httpClient) :
             return new ScrapeResult([], [$"Source '{source.SourceKey}' has no endpoint URL."]);
         }
 
-        using var response = await httpClient.GetAsync(source.EndpointUrl, cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get, source.EndpointUrl);
+        request.Headers.UserAgent.ParseAdd(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xhtml+xml"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/xml", 0.9));
+        request.Headers.AcceptLanguage.ParseAdd("sv-SE,sv;q=0.9,en;q=0.8");
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
