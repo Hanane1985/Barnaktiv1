@@ -26,6 +26,7 @@ public static class DependencyInjection
         services.AddScoped<IActivityScraper, JsonFeedActivityScraper>();
         services.AddScoped<IActivityScraper, GoteborgKalendariumHtmlScraper>();
         services.AddScoped<IActivityScraper, BKHackenStartPlayingScraper>();
+        services.AddScoped<IActivityScraper, BKHackenSportAdminBookingScraper>();
 
         return services;
     }
