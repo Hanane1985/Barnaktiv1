@@ -49,19 +49,19 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
         @"(?<amount>\d+(?:[.,]\d+)?)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex AgeRangeRegex = new(
-        @"(?<!\d)(?<from>\d{1,2})\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2212|till|to)\s*(?<to>\d{1,2})\s*(?:\u00E5r|yrs?|years?)(?!\d)",
+        @"(?<!\d)(?<from>\d{1,2})\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2212|till|to)\s*(?<to>\d{1,2})\s*(?:år|yrs?|years?)(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex AgeFromRegex = new(
-        @"(?:fr\u00E5n|from)\s*(?<from>\d{1,2})\s*(?:\u00E5r|yrs?|years?)|(?<!\d)(?<from>\d{1,2})\s*\+\s*(?:\u00E5r|yrs?|years?)(?!\d)",
+        @"(?:från|from)\s*(?<from>\d{1,2})\s*(?:år|yrs?|years?)|(?<!\d)(?<from>\d{1,2})\s*\+\s*(?:år|yrs?|years?)(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex AgeSingleRegex = new(
-        @"(?:f\u00F6r\s+(?:dig|barn(?:en)?|ungdom(?:ar)?))\s*:?\s*(?<age>\d{1,2})\s*(?:\u00E5r|yrs?|years?)|(?<!\d)(?<age>\d{1,2})-\u00E5r(?:ing|ingar)(?!\w)",
+        @"(?:för\s+(?:dig|barn(?:en)?|ungdom(?:ar)?))\s*:?\s*(?<age>\d{1,2})\s*(?:år|yrs?|years?)|(?<!\d)(?<age>\d{1,2})-år(?:ing|ingar)(?!\w)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex GradeRangeRegex = new(
-        @"(?:\u00E5rskurs|klass|grade)\s*(?<from>\d{1,2})\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2212|till|to)\s*(?<to>\d{1,2})(?!\d)",
+        @"(?:årskurs|klass|grade)\s*(?<from>\d{1,2})\s*(?:-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2212|till|to)\s*(?<to>\d{1,2})(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex GradeFromRegex = new(
-        @"(?:\u00E5rskurs|klass|grade)\s*(?<from>\d{1,2})\s*(?:\+|och upp\u00E5t|and up)(?!\d)",
+        @"(?:årskurs|klass|grade)\s*(?<from>\d{1,2})\s*(?:\+|och uppåt|and up)(?!\d)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly string[] ListDateFormats =
     [
@@ -123,7 +123,7 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             {
                 if (page == 0)
                 {
-                    errors.Add("No activity links were found on the Goteborg kalendarium page.");
+                    errors.Add("No activity links were found on the Göteborg kalendarium page.");
                 }
 
                 break;
@@ -409,7 +409,7 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             description,
             cardFallback.Organizer,
             string.Empty,
-            "Goteborg",
+            "Göteborg",
             ageFrom,
             ageTo,
             "Kalendarium",
@@ -468,7 +468,7 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             ?? GetNestedString(root, "geo", "address")
             ?? string.Empty;
         var category = GetFirstCategory(root) ?? "Kalendarium";
-        var audiences = GetPropertyValues(root, "M\u00E5lgrupper");
+        var audiences = GetPropertyValues(root, "Målgrupper");
         var (ageFrom, ageTo) = InferAgeRange(title, description, audiences);
         var isFree = root.TryGetProperty("isAccessibleForFree", out var isFreeElement) &&
                      isFreeElement.ValueKind == JsonValueKind.True;
@@ -480,7 +480,7 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             description,
             organizer.Trim(),
             location.Trim(),
-            "Goteborg",
+            "Göteborg",
             ageFrom,
             ageTo,
             category.Trim(),
@@ -649,19 +649,19 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             return (0, 1);
         }
 
-        if (normalizedText.Contains("sm\u00E5barn", StringComparison.Ordinal) ||
-            normalizedText.Contains("sm\u00E5 barn", StringComparison.Ordinal))
+        if (normalizedText.Contains("småbarn", StringComparison.Ordinal) ||
+            normalizedText.Contains("små barn", StringComparison.Ordinal))
         {
             return (0, 3);
         }
 
-        if (normalizedText.Contains("alla \u00E5ldrar", StringComparison.Ordinal) ||
+        if (normalizedText.Contains("alla åldrar", StringComparison.Ordinal) ||
             normalizedText.Contains("alla aldrar", StringComparison.Ordinal))
         {
             return (0, 99);
         }
 
-        if (normalizedText.Contains("f\u00F6rskol", StringComparison.Ordinal))
+        if (normalizedText.Contains("förskol", StringComparison.Ordinal))
         {
             return (3, 5);
         }
@@ -671,12 +671,12 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
             return (10, 12);
         }
 
-        if (normalizedText.Contains("l\u00E5gstad", StringComparison.Ordinal))
+        if (normalizedText.Contains("lågstad", StringComparison.Ordinal))
         {
             return (7, 9);
         }
 
-        if (normalizedText.Contains("h\u00F6gstad", StringComparison.Ordinal))
+        if (normalizedText.Contains("högstad", StringComparison.Ordinal))
         {
             return (13, 15);
         }
@@ -718,7 +718,7 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
 
         if (normalizedText.Contains("ungdom", StringComparison.Ordinal) ||
             normalizedText.Contains("unga", StringComparison.Ordinal) ||
-            normalizedText.Contains("ton\u00E5r", StringComparison.Ordinal))
+            normalizedText.Contains("tonår", StringComparison.Ordinal))
         {
             return (13, 25);
         }
