@@ -303,6 +303,7 @@ export function ActivityExplorer({
 }: ActivityExplorerProps) {
   const [search, setSearch] = useState("");
   const [selectedCity, setSelectedCity] = useState("all");
+  const [selectedOrganizer, setSelectedOrganizer] = useState("all");
   const [selectedSport, setSelectedSport] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup>("all");
@@ -313,6 +314,9 @@ export function ActivityExplorer({
   const cities = Array.from(new Set(activities.map((activity) => activity.city).filter(Boolean))).sort(
     (left, right) => left.localeCompare(right),
   );
+  const organizers = Array.from(
+    new Set(activities.map((activity) => activity.organizer).filter(Boolean)),
+  ).sort((left, right) => left.localeCompare(right));
   const sports = Array.from(new Set(activities.map((activity) => activity.sport).filter(Boolean))).sort(
     (left, right) => left.localeCompare(right),
   );
@@ -337,6 +341,8 @@ export function ActivityExplorer({
         .includes(searchTerm);
 
     const matchesCity = selectedCity === "all" || activity.city === selectedCity;
+    const matchesOrganizer =
+      selectedOrganizer === "all" || activity.organizer === selectedOrganizer;
     const matchesSport = selectedSport === "all" || activity.sport === selectedSport;
     const matchesCategory =
       selectedCategory === "all" || activity.category === selectedCategory;
@@ -347,6 +353,7 @@ export function ActivityExplorer({
     return (
       matchesSearch &&
       matchesCity &&
+      matchesOrganizer &&
       matchesSport &&
       matchesCategory &&
       matchesPrice &&
@@ -357,6 +364,7 @@ export function ActivityExplorer({
   const clearFilters = () => {
     setSearch("");
     setSelectedCity("all");
+    setSelectedOrganizer("all");
     setSelectedSport("all");
     setSelectedCategory("all");
     setSelectedAgeGroup("all");
@@ -376,7 +384,7 @@ export function ActivityExplorer({
                 Explore kids activities from the Barnaktiv backend.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-[color:var(--muted)] sm:text-lg">
-                lets you filter by search, city, category, age, and price.
+                lets you filter by search, city, organizer, category, age, and price.
               </p>
             </div>
           </div>
@@ -436,7 +444,7 @@ export function ActivityExplorer({
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_repeat(5,minmax(0,1fr))]">
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_repeat(6,minmax(0,1fr))]">
           <label className="space-y-2">
             <span className="text-sm font-medium text-[color:var(--foreground)]">Search</span>
             <input
@@ -458,6 +466,24 @@ export function ActivityExplorer({
               {cities.map((city) => (
                 <option key={city} value={city}>
                   {city}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Organizer / club
+            </span>
+            <select
+              value={selectedOrganizer}
+              onChange={(event) => setSelectedOrganizer(event.target.value)}
+              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
+            >
+              <option value="all">All organizers</option>
+              {organizers.map((organizer) => (
+                <option key={organizer} value={organizer}>
+                  {organizer}
                 </option>
               ))}
             </select>
