@@ -36,6 +36,9 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
     private static readonly Regex PageLinkRegex = new(
         @"[?&]page=(?<page>\d+)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex ListTotalActivitiesRegex = new(
+        @"<strong>(?<count>\d+)</strong>\s*aktivitet",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex JsonLdRegex = new(
         "<script type=\"application/ld\\+json\">\\s*(?<json>.*?)\\s*</script>",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
@@ -112,12 +115,28 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
 
             var listHtml = listPageResult.Content!;
 
+            var cardFallbacks = ExtractListCardFallbacks(listHtml);
+
             if (page == 0 && source.MaxPages is null)
             {
-                pageCount = DetectPageCount(listHtml) ?? pageCount;
-            }
+                var fromPaginationLinks = DetectPageCount(listHtml);
+                var fromResultBarTotal = DerivePageCountFromListedTotal(listHtml, cardFallbacks.Count);
+                var candidates = new List<int>(2);
+                if (fromPaginationLinks.HasValue)
+                {
+                    candidates.Add(fromPaginationLinks.Value);
+                }
 
-            var cardFallbacks = ExtractListCardFallbacks(listHtml);
+                if (fromResultBarTotal.HasValue)
+                {
+                    candidates.Add(fromResultBarTotal.Value);
+                }
+
+                if (candidates.Count > 0)
+                {
+                    pageCount = Math.Clamp(candidates.Max(), 1, AbsoluteMaxPages);
+                }
+            }
 
             if (cardFallbacks.Count == 0)
             {
@@ -552,6 +571,31 @@ public sealed class GoteborgKalendariumHtmlScraper(HttpClient httpClient) : IAct
         }
 
         return Math.Clamp(pageIndexes.Max() + 1, 1, AbsoluteMaxPages);
+    }
+
+  
+    private static int? DerivePageCountFromListedTotal(string listHtml, int cardsOnFirstPage)
+    {
+        if (cardsOnFirstPage <= 0)
+        {
+            return null;
+        }
+
+        var match = ListTotalActivitiesRegex.Match(listHtml);
+
+        if (!match.Success ||
+            !int.TryParse(
+                match.Groups["count"].Value,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var totalListed) ||
+            totalListed <= 0)
+        {
+            return null;
+        }
+
+        var pagesNeeded = (int)Math.Ceiling(totalListed / (double)cardsOnFirstPage);
+        return Math.Clamp(pagesNeeded, 1, AbsoluteMaxPages);
     }
 
     private static string? GetString(JsonElement element, string propertyName)
