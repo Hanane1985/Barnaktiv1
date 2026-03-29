@@ -34,18 +34,10 @@ const priceFilters: { value: PriceFilter; label: string }[] = [
   { value: "paid", label: "Paid only" },
 ];
 
-const dateFormatter = new Intl.DateTimeFormat("sv-SE", {
-  weekday: "short",
+const detailedDateFormatter = new Intl.DateTimeFormat("sv-SE", {
+  weekday: "long",
   day: "numeric",
-  month: "short",
-});
-
-const dayFormatter = new Intl.DateTimeFormat("sv-SE", {
-  day: "2-digit",
-});
-
-const monthFormatter = new Intl.DateTimeFormat("sv-SE", {
-  month: "short",
+  month: "long",
 });
 
 const priceFormatter = new Intl.NumberFormat("sv-SE", {
@@ -59,28 +51,33 @@ const dateTimeFormatter = new Intl.DateTimeFormat("sv-SE", {
   timeStyle: "short",
 });
 
+const timeFormatter = new Intl.DateTimeFormat("sv-SE", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 function formatPrice(price: number) {
-  return price <= 0 ? "Free" : priceFormatter.format(price);
+  return price <= 0 ? "Gratis" : priceFormatter.format(price);
 }
 
 function formatAgeRange(activity: Activity) {
   if (activity.ageFrom <= 0 && activity.ageTo <= 0) {
-    return "Age not specified";
+    return "Ej angivet";
   }
 
   if (activity.ageFrom <= 0 && activity.ageTo >= 99) {
-    return "All ages";
+    return "Alla åldrar";
   }
 
   if (activity.ageTo >= 99) {
-    return `${activity.ageFrom}+ years`;
+    return `${activity.ageFrom}+ år`;
   }
 
   if (activity.ageFrom === activity.ageTo) {
-    return `${activity.ageFrom} years`;
+    return `${activity.ageFrom} år`;
   }
 
-  return `${activity.ageFrom}-${activity.ageTo} years`;
+  return `${activity.ageFrom}-${activity.ageTo} år`;
 }
 
 function matchesAgeGroup(activity: Activity, selectedAgeGroup: AgeGroup) {
@@ -124,18 +121,18 @@ function formatRegistrationSummary(activity: Activity) {
   switch (registrationStatus) {
     case "Open":
       return registrationCloseAt
-        ? `Registration open until ${dateTimeFormatter.format(registrationCloseAt)}`
-        : "Registration open now";
+        ? `Öppen till ${dateTimeFormatter.format(registrationCloseAt)}`
+        : "Öppen nu";
     case "Upcoming":
       return registrationOpenAt
-        ? `Registration opens ${dateTimeFormatter.format(registrationOpenAt)}`
-        : "Registration opens soon";
+        ? `Öppnar ${dateTimeFormatter.format(registrationOpenAt)}`
+        : "Öppnar snart";
     case "Closed":
       return registrationCloseAt
-        ? `Registration closed ${dateTimeFormatter.format(registrationCloseAt)}`
-        : "Registration closed";
+        ? `Stängde ${dateTimeFormatter.format(registrationCloseAt)}`
+        : "Stängd";
     case "Full":
-      return "Currently full";
+      return "Fullbokad";
     default:
       return null;
   }
@@ -160,138 +157,179 @@ function getPrimaryLink(activity: Activity) {
   if (activity.signupUrl) {
     return {
       href: activity.signupUrl,
-      label: "Register",
+      label: "Anmäl dig",
     };
   }
 
   if (activity.websiteUrl) {
     return {
       href: activity.websiteUrl,
-      label: "Visit site",
+      label: "Besök sida",
     };
   }
 
   return null;
 }
 
+function hasSpecifiedTime(date: Date) {
+  return date.getHours() !== 0 || date.getMinutes() !== 0;
+}
+
+function capitalizeFirstLetter(value: string) {
+  if (!value) {
+    return value;
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function ActivityCard({ activity }: { activity: Activity }) {
   const activityDate = new Date(activity.date);
+  const [imageFailed, setImageFailed] = useState(false);
   const categoryLabel = activity.category || "General";
   const sportLabel = activity.sport || null;
-  const cityLabel = activity.city || "Unknown city";
-  const organizerLabel = activity.organizer || "Organizer to be confirmed";
-  const sourceLabel = activity.source || "Manual import";
+  const cityLabel = activity.city || "Stad saknas";
+  const organizerLabel = activity.organizer || "Arrangör kommer snart";
+  const sourceLabel = activity.source || "Manuell import";
   const registrationStatus = activity.registrationStatus as RegistrationStatus;
   const registrationSummary = formatRegistrationSummary(activity);
   const primaryLink = getPrimaryLink(activity);
-  const dateLabel =
-    activity.listingType === "Program" && activity.registrationOpenAt
-      ? "Primary date"
-      : "Date";
+  const imageUrl = activity.imageUrl?.trim() || "";
+  const showImage = imageUrl.length > 0 && !imageFailed;
+  const formattedDate = capitalizeFirstLetter(
+    detailedDateFormatter.format(activityDate),
+  );
+  const timeLabel = hasSpecifiedTime(activityDate)
+    ? timeFormatter.format(activityDate)
+    : "Tid ej angiven";
 
   return (
-    <article className="flex h-full flex-col rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-5 shadow-[var(--card-shadow)] shadow-black/5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-3">
+    <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/5">
+      <div className="relative aspect-[16/10] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#fffaf4)]">
+        {showImage ? (
+          // The scraped image hosts vary, so keep a plain img here instead of broad remote image allow-lists.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt={activity.title}
+            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col justify-end bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),transparent_38%),linear-gradient(135deg,rgba(223,105,55,0.3),rgba(247,220,205,0.88)_60%,rgba(255,253,248,1))] p-5">
+            <div className="max-w-[14rem] rounded-[1.5rem] bg-white/78 p-4 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)]">
+                Barnaktiv
+              </p>
+              <p className="mt-2 text-base font-semibold leading-5 text-[color:var(--foreground)]">
+                {activity.location || cityLabel}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
           <div className="flex flex-wrap gap-2">
             {sportLabel ? (
-              <span className="rounded-full bg-[color:var(--foreground)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--background)]">
+              <span className="rounded-full bg-[color:var(--foreground)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--background)] shadow-sm">
                 {sportLabel}
               </span>
             ) : null}
-            <span className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
+            <span className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm">
               {categoryLabel}
+            </span>
+          </div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <span className="rounded-full bg-white/88 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm backdrop-blur-sm">
+              {formatPrice(activity.price)}
             </span>
             {registrationSummary ? (
               <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${getRegistrationBadgeClassName(
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-sm ${getRegistrationBadgeClassName(
                   registrationStatus,
                 )}`}
               >
                 {registrationStatus}
               </span>
             ) : null}
-            <span className="rounded-full border border-[color:var(--border)] px-3 py-1 text-xs font-medium text-[color:var(--muted)]">
-              {cityLabel}
-            </span>
           </div>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
+        <div className="space-y-4">
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold tracking-tight text-[color:var(--foreground)]">
+            <h2 className="text-[1.35rem] font-semibold leading-tight tracking-tight text-[color:var(--foreground)]">
               {activity.title}
             </h2>
-            <p className="text-sm leading-6 text-[color:var(--muted)]">
-              {activity.description || "No description available yet."}
+            <p className="text-sm font-medium text-[color:var(--muted)]">
+              {activity.location || "Plats kommer snart"}
             </p>
           </div>
-        </div>
 
-        <div className="min-w-[5rem] rounded-[1.5rem] bg-[color:var(--foreground)] px-3 py-4 text-center text-[color:var(--background)]">
-          <div className="text-3xl font-semibold leading-none">
-            {dayFormatter.format(activityDate)}
+          <dl className="grid gap-3 text-sm text-[color:var(--foreground)] sm:grid-cols-2">
+            <div className="rounded-2xl bg-white/70 px-4 py-3">
+              <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                Datum
+              </dt>
+              <dd className="mt-1 font-medium">{formattedDate}</dd>
+            </div>
+            <div className="rounded-2xl bg-white/70 px-4 py-3">
+              <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                Tid
+              </dt>
+              <dd className="mt-1 font-medium">{timeLabel}</dd>
+            </div>
+          </dl>
+
+          <div className="flex flex-wrap gap-2 text-sm">
+            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-2 font-medium text-[color:var(--foreground)]">
+              Stad: {cityLabel}
+            </span>
+            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-2 font-medium text-[color:var(--foreground)]">
+              {"Ålder: "}{formatAgeRange(activity)}
+            </span>
+            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-2 font-medium text-[color:var(--foreground)]">
+              Pris: {formatPrice(activity.price)}
+            </span>
           </div>
-          <div className="mt-1 text-xs uppercase tracking-[0.3em] text-white/70">
-            {monthFormatter.format(activityDate)}
+
+          {registrationSummary ? (
+            <div className="rounded-2xl bg-white/70 px-4 py-3 text-sm">
+              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                {"Anmälan"}
+              </p>
+              <p className="mt-1 font-medium text-[color:var(--foreground)]">
+                {registrationSummary}
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-auto pt-6">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--muted)]">
+            <span>{organizerLabel}</span>
+            <span className="h-1 w-1 rounded-full bg-current" />
+            <span>{sourceLabel}</span>
+          </div>
+
+          <div className="mt-5 flex items-center justify-between gap-3">
+            <p className="text-sm text-[color:var(--muted)]">
+              Tillagd {new Date(activity.createdAt).toLocaleDateString("sv-SE")}
+            </p>
+            {primaryLink ? (
+              <Link
+                href={primaryLink.href}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)]"
+              >
+                {primaryLink.label}
+              </Link>
+            ) : null}
           </div>
         </div>
-      </div>
-
-      <dl className="mt-6 grid gap-3 text-sm text-[color:var(--foreground)] sm:grid-cols-2">
-        <div className="rounded-2xl bg-white/70 px-4 py-3">
-          <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            {dateLabel}
-          </dt>
-          <dd className="mt-1 font-medium">{dateFormatter.format(activityDate)}</dd>
-        </div>
-        <div className="rounded-2xl bg-white/70 px-4 py-3">
-          <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            Age
-          </dt>
-          <dd className="mt-1 font-medium">{formatAgeRange(activity)}</dd>
-        </div>
-        <div className="rounded-2xl bg-white/70 px-4 py-3">
-          <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            Place
-          </dt>
-          <dd className="mt-1 font-medium">
-            {activity.location || "Location to be confirmed"}
-          </dd>
-        </div>
-        <div className="rounded-2xl bg-white/70 px-4 py-3">
-          <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-            Price
-          </dt>
-          <dd className="mt-1 font-medium">{formatPrice(activity.price)}</dd>
-        </div>
-        {registrationSummary ? (
-          <div className="rounded-2xl bg-white/70 px-4 py-3 sm:col-span-2">
-            <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-              Registration
-            </dt>
-            <dd className="mt-1 font-medium">{registrationSummary}</dd>
-          </div>
-        ) : null}
-      </dl>
-
-      <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-[color:var(--muted)]">
-        <span>{organizerLabel}</span>
-        <span className="h-1 w-1 rounded-full bg-current" />
-        <span>{sourceLabel}</span>
-      </div>
-
-      <div className="mt-6 flex items-center justify-between gap-3">
-        <p className="text-sm text-[color:var(--muted)]">
-          Added {new Date(activity.createdAt).toLocaleDateString("sv-SE")}
-        </p>
-        {primaryLink ? (
-          <Link
-            href={primaryLink.href}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)]"
-          >
-            {primaryLink.label}
-          </Link>
-        ) : null}
       </div>
     </article>
   );
