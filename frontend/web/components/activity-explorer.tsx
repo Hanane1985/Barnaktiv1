@@ -314,11 +314,8 @@ function ActivityCard({ activity }: { activity: Activity }) {
             <span>{sourceLabel}</span>
           </div>
 
-          <div className="mt-5 flex items-center justify-between gap-3">
-            <p className="text-sm text-[color:var(--muted)]">
-              Tillagd {new Date(activity.createdAt).toLocaleDateString("sv-SE")}
-            </p>
-            {primaryLink ? (
+          {primaryLink ? (
+            <div className="mt-5 flex justify-end">
               <Link
                 href={primaryLink.href}
                 target="_blank"
@@ -327,8 +324,8 @@ function ActivityCard({ activity }: { activity: Activity }) {
               >
                 {primaryLink.label}
               </Link>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </article>
