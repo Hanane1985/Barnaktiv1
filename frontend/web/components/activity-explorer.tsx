@@ -12,6 +12,14 @@ type ActivityExplorerProps = {
 
 type AgeGroup = "all" | "0-3" | "4-6" | "7-9" | "10-12" | "13+";
 type PriceFilter = "all" | "free" | "paid";
+type SortOption =
+  | "date-asc"
+  | "date-desc"
+  | "created-desc"
+  | "registration"
+  | "price-asc"
+  | "price-desc"
+  | "title-asc";
 type RegistrationStatus = "Unknown" | "Upcoming" | "Open" | "Closed" | "Full";
 type FallbackImage = {
   photoSrc: string;
@@ -38,6 +46,24 @@ const priceFilters: { value: PriceFilter; label: string }[] = [
   { value: "free", label: "Gratis" },
   { value: "paid", label: "Betalaktiviteter" },
 ];
+
+const sortOptions: { value: SortOption; label: string }[] = [
+  { value: "date-asc", label: "Äldst datum först" },
+  { value: "date-desc", label: "Nyast datum först" },
+  { value: "created-desc", label: "Senast tillagda" },
+  { value: "registration", label: "Öppen anmälan först" },
+  { value: "price-asc", label: "Billigast först" },
+  { value: "price-desc", label: "Dyrast först" },
+  { value: "title-asc", label: "A-Ö" },
+];
+
+const registrationPriority: Record<RegistrationStatus, number> = {
+  Open: 0,
+  Upcoming: 1,
+  Unknown: 2,
+  Full: 3,
+  Closed: 4,
+};
 
 const detailedDateFormatter = new Intl.DateTimeFormat("sv-SE", {
   weekday: "long",
@@ -112,6 +138,108 @@ function getResultSummary(count: number) {
   }
 
   return `${count} aktiviteter`;
+}
+
+function getTimestamp(value: string | null | undefined) {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  return new Date(value).getTime();
+}
+
+function compareNumbers(left: number, right: number) {
+  const leftIsValid = Number.isFinite(left);
+  const rightIsValid = Number.isFinite(right);
+
+  if (!leftIsValid && !rightIsValid) {
+    return 0;
+  }
+
+  if (!leftIsValid) {
+    return 1;
+  }
+
+  if (!rightIsValid) {
+    return -1;
+  }
+
+  return left - right;
+}
+
+function compareNumbersDescending(left: number, right: number) {
+  const leftIsValid = Number.isFinite(left);
+  const rightIsValid = Number.isFinite(right);
+
+  if (!leftIsValid && !rightIsValid) {
+    return 0;
+  }
+
+  if (!leftIsValid) {
+    return 1;
+  }
+
+  if (!rightIsValid) {
+    return -1;
+  }
+
+  return right - left;
+}
+
+function compareTitles(left: Activity, right: Activity) {
+  return left.title.localeCompare(right.title, "sv-SE");
+}
+
+function compareActivities(
+  left: Activity,
+  right: Activity,
+  selectedSort: SortOption,
+) {
+  switch (selectedSort) {
+    case "date-desc":
+      return (
+        compareNumbersDescending(getTimestamp(left.date), getTimestamp(right.date)) ||
+        compareTitles(left, right)
+      );
+    case "created-desc":
+      return (
+        compareNumbersDescending(
+          getTimestamp(left.createdAt),
+          getTimestamp(right.createdAt),
+        ) ||
+        compareNumbers(getTimestamp(left.date), getTimestamp(right.date)) ||
+        compareTitles(left, right)
+      );
+    case "registration": {
+      const leftPriority =
+        registrationPriority[left.registrationStatus as RegistrationStatus] ??
+        registrationPriority.Unknown;
+      const rightPriority =
+        registrationPriority[right.registrationStatus as RegistrationStatus] ??
+        registrationPriority.Unknown;
+
+      return (
+        compareNumbers(leftPriority, rightPriority) ||
+        compareNumbers(getTimestamp(left.date), getTimestamp(right.date)) ||
+        compareTitles(left, right)
+      );
+    }
+    case "price-asc":
+      return compareNumbers(left.price, right.price) || compareTitles(left, right);
+    case "price-desc":
+      return (
+        compareNumbersDescending(left.price, right.price) ||
+        compareTitles(left, right)
+      );
+    case "title-asc":
+      return compareTitles(left, right);
+    case "date-asc":
+    default:
+      return (
+        compareNumbers(getTimestamp(left.date), getTimestamp(right.date)) ||
+        compareTitles(left, right)
+      );
+  }
 }
 
 function formatRegistrationSummary(activity: Activity) {
@@ -478,8 +606,8 @@ function ActivityCard({ activity }: { activity: Activity }) {
     : "Tid ej angiven";
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/8 transition duration-300 hover:-translate-y-1">
-      <div className="relative aspect-[16/10] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#f6f0e6)]">
+    <article className="group flex h-full flex-col overflow-hidden rounded-[1.9rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/8 transition duration-300 hover:-translate-y-1">
+      <div className="relative aspect-[16/9] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#f6f0e6)]">
         {showImage ? (
           <>
             {/* Activity images come from multiple hosts, so use a plain img instead of broad remote image configuration. */}
@@ -494,22 +622,22 @@ function ActivityCard({ activity }: { activity: Activity }) {
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(17,29,24,0.08),rgba(17,29,24,0.54))]" />
           </>
         ) : (
-          <div className="flex h-full w-full flex-col justify-end bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),transparent_38%),linear-gradient(135deg,rgba(223,105,55,0.3),rgba(247,220,205,0.88)_60%,rgba(255,253,248,1))] p-5">
-            <div className="max-w-[14rem] rounded-[1.5rem] bg-white p-4">
+          <div className="flex h-full w-full flex-col justify-end bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),transparent_38%),linear-gradient(135deg,rgba(223,105,55,0.3),rgba(247,220,205,0.88)_60%,rgba(255,253,248,1))] p-4">
+            <div className="max-w-[14rem] rounded-[1.4rem] bg-white p-3.5">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)]">
                 Barnaktiv
               </p>
-              <p className="mt-2 text-base font-semibold leading-5 text-[color:var(--foreground)]">
+              <p className="mt-2 text-sm font-semibold leading-5 text-[color:var(--foreground)]">
                 {activity.location || cityLabel}
               </p>
             </div>
           </div>
         )}
 
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3.5">
           <div className="flex flex-wrap gap-2">
             {sportLabel ? (
-              <span className="rounded-full bg-[color:var(--foreground)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--background)] shadow-sm">
+              <span className="rounded-full bg-[color:var(--foreground)] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--background)] shadow-sm">
                 {sportLabel}
               </span>
             ) : null}
@@ -517,7 +645,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
               ? categoryLabels.slice(0, 2).map((categoryLabel) => (
                   <span
                     key={categoryLabel}
-                    className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm"
+                    className="rounded-full bg-[color:var(--accent-soft)] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[color:var(--accent-strong)] shadow-sm"
                   >
                     {categoryLabel}
                   </span>
@@ -525,12 +653,12 @@ function ActivityCard({ activity }: { activity: Activity }) {
               : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm">
+            <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm">
               {formatPrice(activity.price)}
             </span>
             {registrationSummary ? (
               <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] shadow-sm ${getRegistrationBadgeClassName(
+                className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] shadow-sm ${getRegistrationBadgeClassName(
                   registrationStatus,
                 )}`}
               >
@@ -541,68 +669,58 @@ function ActivityCard({ activity }: { activity: Activity }) {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <h2 className="text-[1.35rem] font-semibold leading-tight tracking-tight text-[color:var(--foreground)]">
+      <div className="flex flex-1 flex-col p-4 sm:p-5">
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <h2 className="text-[1.16rem] font-semibold leading-tight tracking-tight text-[color:var(--foreground)]">
               {activity.title}
             </h2>
             <p className="text-sm font-medium text-[color:var(--muted)]">
               {activity.location || "Plats kommer snart"}
             </p>
-            <p className="text-sm leading-6 text-[color:var(--muted)]">
+            <p className="overflow-hidden text-sm leading-6 text-[color:var(--muted)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
               {formatDescriptionSnippet(activity.description)}
             </p>
           </div>
 
-          <dl className="grid gap-3 text-sm text-[color:var(--foreground)] sm:grid-cols-2">
-            <div className="rounded-2xl bg-[rgba(255,255,255,0.78)] px-4 py-3">
-              <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                Datum
-              </dt>
-              <dd className="mt-1 font-medium">{formattedDate}</dd>
+          <div className="rounded-[1.35rem] bg-[rgba(255,255,255,0.82)] px-4 py-3 text-sm text-[color:var(--foreground)]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                När
+              </span>
+              <span className="font-medium">{formattedDate}</span>
+              <span className="h-1 w-1 rounded-full bg-[rgba(96,112,99,0.45)]" />
+              <span className="font-medium">{timeLabel}</span>
             </div>
-            <div className="rounded-2xl bg-[rgba(255,255,255,0.78)] px-4 py-3">
-              <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                Tid
-              </dt>
-              <dd className="mt-1 font-medium">{timeLabel}</dd>
-            </div>
-          </dl>
 
-          <div className="flex flex-wrap gap-2 text-sm">
-            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-2 font-medium text-[color:var(--foreground)]">
-              Stad: {cityLabel}
-            </span>
-            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-2 font-medium text-[color:var(--foreground)]">
-              {"Ålder: "}{formatAgeRange(activity)}
-            </span>
-            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-2 font-medium text-[color:var(--foreground)]">
-              Pris: {formatPrice(activity.price)}
-            </span>
-          </div>
-
-          {registrationSummary ? (
-            <div className="rounded-2xl bg-[rgba(255,255,255,0.78)] px-4 py-3 text-sm">
-              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                Anmälan
-              </p>
-              <p className="mt-1 font-medium text-[color:var(--foreground)]">
+            {registrationSummary ? (
+              <p className="mt-2 text-sm font-medium text-[color:var(--foreground)]">
                 {registrationSummary}
               </p>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-sm">
+            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-1.5 font-medium text-[color:var(--foreground)]">
+              Stad: {cityLabel}
+            </span>
+            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-1.5 font-medium text-[color:var(--foreground)]">
+              {"Ålder: "}{formatAgeRange(activity)}
+            </span>
+          </div>
         </div>
 
-        <div className="mt-auto pt-6">
-          <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--muted)]">
-            <span>{organizerLabel}</span>
+        <div className="mt-auto pt-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--muted)]">
+            <span className="font-medium text-[color:var(--foreground)]">
+              {organizerLabel}
+            </span>
             <span className="h-1 w-1 rounded-full bg-current" />
             <span>{sourceLabel}</span>
           </div>
 
           {primaryLink ? (
-            <div className="mt-5 flex justify-end">
+            <div className="mt-4 flex justify-end">
               <Link
                 href={primaryLink.href}
                 target="_blank"
@@ -630,6 +748,8 @@ export function ActivityExplorer({
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup>("all");
   const [selectedPrice, setSelectedPrice] = useState<PriceFilter>("all");
+  const [selectedSort, setSelectedSort] = useState<SortOption>("date-asc");
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const searchTerm = deferredSearch.trim().toLowerCase();
 
@@ -685,6 +805,12 @@ export function ActivityExplorer({
       matchesAgeGroup(activity, selectedAgeGroup)
     );
   });
+  const sortedActivities = [...filteredActivities].sort((left, right) =>
+    compareActivities(left, right, selectedSort),
+  );
+  const selectedSortLabel =
+    sortOptions.find((option) => option.value === selectedSort)?.label ??
+    sortOptions[0].label;
 
   const openActivitiesCount = activities.filter(
     (activity) => activity.registrationStatus === "Open",
@@ -703,6 +829,8 @@ export function ActivityExplorer({
     setSelectedCategory("all");
     setSelectedAgeGroup("all");
     setSelectedPrice("all");
+    setSelectedSort("date-asc");
+    setIsSortMenuOpen(false);
   };
 
   return (
@@ -881,16 +1009,61 @@ export function ActivityExplorer({
               pris så du slipper gissa dig fram.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
-          >
-            Rensa filter
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="relative">
+              <button
+                type="button"
+                aria-expanded={isSortMenuOpen}
+                aria-haspopup="menu"
+                onClick={() => setIsSortMenuOpen((current) => !current)}
+                className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
+              >
+                Sortera: {selectedSortLabel}
+              </button>
+
+              {isSortMenuOpen ? (
+                <div className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-[1.5rem] border border-[color:var(--border)] bg-white p-2 shadow-[0_24px_60px_-36px_rgba(15,34,24,0.36)]">
+                  <div className="space-y-1">
+                    {sortOptions.map((sortOption) => {
+                      const isSelected = sortOption.value === selectedSort;
+
+                      return (
+                        <button
+                          key={sortOption.value}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSort(sortOption.value);
+                            setIsSortMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-[1.15rem] px-3 py-2.5 text-left text-sm transition ${
+                            isSelected
+                              ? "bg-[color:var(--foreground)] font-semibold text-[color:var(--background)]"
+                              : "text-[color:var(--foreground)] hover:bg-[#fffaf5]"
+                          }`}
+                        >
+                          <span>{sortOption.label}</span>
+                          <span className="text-xs">
+                            {isSelected ? "Vald" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
+            >
+              Rensa filter
+            </button>
+          </div>
         </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_repeat(6,minmax(0,1fr))]">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1.7fr_repeat(6,minmax(0,1fr))]">
           <label className="space-y-2">
             <span className="text-sm font-medium text-[color:var(--foreground)]">
               Sök
@@ -1008,6 +1181,7 @@ export function ActivityExplorer({
               ))}
             </select>
           </label>
+
         </div>
       </section>
 
@@ -1018,17 +1192,23 @@ export function ActivityExplorer({
               Aktiviteter att upptäcka
             </h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              {getResultSummary(filteredActivities.length)} efter dina val.
+              {getResultSummary(sortedActivities.length)} efter dina val.
             </p>
           </div>
-          <p className="text-sm text-[color:var(--muted)]">
-            Visar kort med bild, pris, ålder och anmälningsläge.
-          </p>
+          <div className="text-sm text-[color:var(--muted)]">
+            <p>
+              Sortering:{" "}
+              <span className="font-medium text-[color:var(--foreground)]">
+                {selectedSortLabel}
+              </span>
+            </p>
+            <p className="mt-1">Visar kort med bild, pris, ålder och anmälningsläge.</p>
+          </div>
         </div>
 
-        {filteredActivities.length > 0 ? (
+        {sortedActivities.length > 0 ? (
           <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-            {filteredActivities.map((activity) => (
+            {sortedActivities.map((activity) => (
               <ActivityCard key={activity.id} activity={activity} />
             ))}
           </div>
