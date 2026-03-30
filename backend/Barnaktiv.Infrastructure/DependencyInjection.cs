@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IActivityScraper, BKHackenStartPlayingScraper>();
         services.AddScoped<IActivityScraper, BKHackenSportAdminBookingScraper>();
         services.AddScoped<IActivityScraper, IfkGoteborgSportAdminBookingScraper>();
+        services.AddScoped<IActivityScraper, SlsGoteborgSportAdminBookingScraper>();
 
         return services;
     }
