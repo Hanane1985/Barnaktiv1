@@ -316,11 +316,31 @@ function capitalizeFirstLetter(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function getCanonicalCategoryLabel(category: string) {
+  const trimmedCategory = category.trim();
+  const normalizedCategory = trimmedCategory
+    .toLowerCase()
+    .replace(/\s*\/\s*/g, "/")
+    .replace(/\s+/g, " ");
+
+  switch (normalizedCategory) {
+    case "bad":
+    case "bad/simning":
+      return "Bad/Simning";
+    default:
+      return trimmedCategory;
+  }
+}
+
 function getCategoryLabels(categoryValue: string) {
-  return categoryValue
-    .split(",")
-    .map((category) => category.trim())
-    .filter(Boolean);
+  return Array.from(
+    new Set(
+      categoryValue
+        .split(",")
+        .map((category) => getCanonicalCategoryLabel(category))
+        .filter(Boolean),
+    ),
+  );
 }
 
 function normalizeMatchingText(value: string) {
@@ -854,21 +874,6 @@ export function ActivityExplorer({
                 barn. Filtrera på stad, ålder, pris och anmälan utan att hoppa
                 mellan olika sidor.
               </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="#utforska"
-                className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-[color:var(--background)] transition hover:translate-y-[-1px] hover:bg-[#16271d]"
-              >
-                Utforska aktiviteter
-              </Link>
-              <Link
-                href="#aktiviteter"
-                className="rounded-full border border-[color:var(--border)] bg-white px-5 py-3 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
-              >
-                Se alla kort
-              </Link>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
