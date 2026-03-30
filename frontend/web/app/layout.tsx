@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Barnaktiv",
-  description: "Browse children's activities from the Barnaktiv API.",
+  title: "Barnaktiv | Hitta barnaktiviteter i din stad",
+  description:
+    "Upptäck barnaktiviteter, prova-på-pass och lovaktiviteter med en varm och inspirerande översikt.",
 };
 
 export default function RootLayout({
@@ -12,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="sv">
       <body>{children}</body>
     </html>
   );

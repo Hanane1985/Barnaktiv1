@@ -13,6 +13,11 @@ type ActivityExplorerProps = {
 type AgeGroup = "all" | "0-3" | "4-6" | "7-9" | "10-12" | "13+";
 type PriceFilter = "all" | "free" | "paid";
 type RegistrationStatus = "Unknown" | "Upcoming" | "Open" | "Closed" | "Full";
+type FallbackImage = {
+  photoSrc: string;
+  backupSrc: string;
+  label: string;
+};
 
 const ageGroups: {
   value: AgeGroup;
@@ -20,18 +25,18 @@ const ageGroups: {
   min?: number;
   max?: number;
 }[] = [
-  { value: "all", label: "All ages" },
-  { value: "0-3", label: "0-3 years", min: 0, max: 3 },
-  { value: "4-6", label: "4-6 years", min: 4, max: 6 },
-  { value: "7-9", label: "7-9 years", min: 7, max: 9 },
-  { value: "10-12", label: "10-12 years", min: 10, max: 12 },
-  { value: "13+", label: "13+ years", min: 13, max: 99 },
+  { value: "all", label: "Alla åldrar" },
+  { value: "0-3", label: "0-3 år", min: 0, max: 3 },
+  { value: "4-6", label: "4-6 år", min: 4, max: 6 },
+  { value: "7-9", label: "7-9 år", min: 7, max: 9 },
+  { value: "10-12", label: "10-12 år", min: 10, max: 12 },
+  { value: "13+", label: "13+ år", min: 13, max: 99 },
 ];
 
 const priceFilters: { value: PriceFilter; label: string }[] = [
-  { value: "all", label: "Any price" },
-  { value: "free", label: "Free only" },
-  { value: "paid", label: "Paid only" },
+  { value: "all", label: "Alla priser" },
+  { value: "free", label: "Gratis" },
+  { value: "paid", label: "Betalaktiviteter" },
 ];
 
 const detailedDateFormatter = new Intl.DateTimeFormat("sv-SE", {
@@ -99,14 +104,14 @@ function matchesAgeGroup(activity: Activity, selectedAgeGroup: AgeGroup) {
 
 function getResultSummary(count: number) {
   if (count === 0) {
-    return "No matching activities";
+    return "Inga aktiviteter matchar";
   }
 
   if (count === 1) {
-    return "1 activity";
+    return "1 aktivitet";
   }
 
-  return `${count} activities`;
+  return `${count} aktiviteter`;
 }
 
 function formatRegistrationSummary(activity: Activity) {
@@ -157,14 +162,14 @@ function getPrimaryLink(activity: Activity) {
   if (activity.signupUrl) {
     return {
       href: activity.signupUrl,
-      label: "Anmäl dig",
+      label: "Anmäl nu",
     };
   }
 
   if (activity.websiteUrl) {
     return {
       href: activity.websiteUrl,
-      label: "Besök sida",
+      label: "Läs mer",
     };
   }
 
@@ -190,9 +195,226 @@ function getCategoryLabels(categoryValue: string) {
     .filter(Boolean);
 }
 
+function normalizeMatchingText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getFallbackImage(activity?: Activity): FallbackImage {
+  const haystack = normalizeMatchingText(
+    [
+      activity?.sport,
+      activity?.category,
+      activity?.title,
+      activity?.description,
+      activity?.location,
+      activity?.city,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  if (/(fotboll|football|soccer)/.test(haystack)) {
+    return {
+      photoSrc:
+        "https://images.pexels.com/photos/8941573/pexels-photo-8941573.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      backupSrc: "/images/fallbacks/football.svg",
+      label: "Fotbollsillustration",
+    };
+  }
+
+  if (/(sim|swim|vatten|bad|pool|aqua)/.test(haystack)) {
+    return {
+      photoSrc:
+        "https://images.pexels.com/photos/3099220/pexels-photo-3099220.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      backupSrc: "/images/fallbacks/water.svg",
+      label: "Vattenaktivitet",
+    };
+  }
+
+  if (
+    /(musik|teater|dans|konst|art|mala|skapa|skapande|kultur|drama|piano|gitarr)/.test(
+      haystack,
+    )
+  ) {
+    return {
+      photoSrc:
+        "https://images.pexels.com/photos/6719007/pexels-photo-6719007.jpeg?auto=compress&cs=tinysrgb&w=1200",
+      backupSrc: "/images/fallbacks/creative.svg",
+      label: "Kreativ aktivitet",
+    };
+  }
+
+  return {
+    photoSrc:
+      "https://images.pexels.com/photos/7671335/pexels-photo-7671335.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    backupSrc: "/images/fallbacks/movement.svg",
+    label: "Aktivitetsillustration",
+  };
+}
+
+function formatDescriptionSnippet(description: string) {
+  const cleanDescription = description.replace(/\s+/g, " ").trim();
+
+  if (cleanDescription.length === 0) {
+    return "Rörelse, gemenskap och nya favoriter för barn som vill testa något nytt.";
+  }
+
+  if (cleanDescription.length <= 150) {
+    return cleanDescription;
+  }
+
+  return `${cleanDescription.slice(0, 147).trimEnd()}...`;
+}
+
+function getHeroActivities(activities: Activity[]) {
+  const uniqueActivities = new Map<string, Activity>();
+
+  for (const activity of activities) {
+    if (!uniqueActivities.has(activity.id)) {
+      uniqueActivities.set(activity.id, activity);
+    }
+  }
+
+  const allActivities = Array.from(uniqueActivities.values());
+  const withImages = allActivities.filter((activity) => activity.imageUrl?.trim());
+  const withoutImages = allActivities.filter(
+    (activity) => !activity.imageUrl?.trim(),
+  );
+
+  return [...withImages, ...withoutImages].slice(0, 3);
+}
+
+function FeaturedImageCard({
+  activity,
+  className = "",
+}: {
+  activity?: Activity;
+  className?: string;
+}) {
+  const imageUrl = activity?.imageUrl?.trim() ?? "";
+  const fallbackImage = getFallbackImage(activity);
+  const imageSources = [
+    imageUrl.length > 0 ? imageUrl : null,
+    fallbackImage.photoSrc,
+    fallbackImage.backupSrc,
+  ].filter(Boolean) as string[];
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const displayImageSrc = imageSources[sourceIndex];
+  const usingOriginalImage = displayImageSrc === imageUrl && imageUrl.length > 0;
+  const showImage = Boolean(displayImageSrc);
+  const categoryLabel = activity
+    ? activity.sport || getCategoryLabels(activity.category)[0] || "Barnaktiv"
+    : "Barnaktiv";
+  const cityLabel = activity?.city || activity?.location || "Nära dig";
+  const title = activity?.title || "Aktiviteter som väcker nyfikenhet";
+  const supportingText = activity
+    ? `${cityLabel} / ${formatAgeRange(activity)}`
+    : "Filtrera på ålder, plats och pris och hitta rätt snabbare.";
+
+  return (
+    <article
+      className={`relative overflow-hidden rounded-[2rem] border border-white/45 bg-[linear-gradient(160deg,rgba(255,243,231,0.95),rgba(255,255,255,0.86)_52%,rgba(236,245,239,0.92))] shadow-[0_24px_70px_-36px_rgba(15,34,24,0.55)] ${className}`}
+    >
+      {showImage ? (
+        <>
+          {/* Activity images come from multiple hosts, so use a plain img instead of broad remote image configuration. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={displayImageSrc}
+            alt={usingOriginalImage ? title : `${fallbackImage.label} för ${title}`}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+            onError={() => setSourceIndex((current) => current + 1)}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,26,21,0.08),rgba(14,26,21,0.72))]" />
+        </>
+      ) : (
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_35%),linear-gradient(145deg,rgba(222,113,57,0.34),rgba(255,239,224,0.92)_56%,rgba(233,242,235,0.96))]" />
+      )}
+
+      <div className="relative flex h-full min-h-[14rem] flex-col justify-between p-5">
+        <span className="inline-flex w-fit rounded-full border border-white/30 bg-white/80 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)] backdrop-blur-sm">
+          {categoryLabel}
+        </span>
+
+        <div className="max-w-[18rem] rounded-[1.6rem] border border-white/20 bg-[rgba(16,30,24,0.58)] p-4 text-white shadow-lg backdrop-blur-md">
+          <p className="text-xs uppercase tracking-[0.18em] text-white/70">
+            {cityLabel}
+          </p>
+          <h3 className="mt-2 text-xl font-semibold leading-tight">{title}</h3>
+          <p className="mt-2 text-sm leading-6 text-white/80">
+            {supportingText}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function HeroCollage({
+  activities,
+  openActivitiesCount,
+  freeActivitiesCount,
+}: {
+  activities: Activity[];
+  openActivitiesCount: number;
+  freeActivitiesCount: number;
+}) {
+  const heroActivities = getHeroActivities(activities);
+
+  return (
+    <div className="relative min-h-[28rem] lg:min-h-[35rem]">
+      <div className="pointer-events-none absolute -left-8 top-10 h-32 w-32 rounded-full bg-white/70 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-[rgba(224,116,58,0.24)] blur-3xl" />
+
+      <div className="grid h-full gap-4 sm:grid-cols-2 sm:grid-rows-[1.15fr_0.85fr]">
+        <FeaturedImageCard
+          key={heroActivities[0]?.id ?? "hero-primary"}
+          activity={heroActivities[0]}
+          className="sm:row-span-2 min-h-[20rem] sm:min-h-[35rem]"
+        />
+        <FeaturedImageCard
+          key={heroActivities[1]?.id ?? "hero-secondary"}
+          activity={heroActivities[1]}
+          className="min-h-[15rem]"
+        />
+        <FeaturedImageCard
+          key={heroActivities[2]?.id ?? "hero-tertiary"}
+          activity={heroActivities[2]}
+          className="min-h-[15rem]"
+        />
+      </div>
+
+      <div className="absolute -bottom-5 left-5 right-5 rounded-[1.7rem] border border-white/55 bg-white/80 p-4 shadow-[0_18px_40px_-30px_rgba(15,34,24,0.55)] backdrop-blur-md sm:left-auto sm:right-8 sm:w-[18rem]">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--accent-strong)]">
+          Just nu i Barnaktiv
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-[1.25rem] bg-[color:var(--foreground)] px-3 py-3 text-[color:var(--background)]">
+            <p className="text-[0.68rem] uppercase tracking-[0.18em] text-white/70">
+              Öppet nu
+            </p>
+            <p className="mt-2 text-2xl font-semibold">{openActivitiesCount}</p>
+          </div>
+          <div className="rounded-[1.25rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-3">
+            <p className="text-[0.68rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Gratis
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-[color:var(--foreground)]">
+              {freeActivitiesCount}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ActivityCard({ activity }: { activity: Activity }) {
   const activityDate = new Date(activity.date);
-  const [imageFailed, setImageFailed] = useState(false);
   const categoryLabels = getCategoryLabels(activity.category);
   const sportLabel = activity.sport || null;
   const cityLabel = activity.city || "Stad saknas";
@@ -202,7 +424,16 @@ function ActivityCard({ activity }: { activity: Activity }) {
   const registrationSummary = formatRegistrationSummary(activity);
   const primaryLink = getPrimaryLink(activity);
   const imageUrl = activity.imageUrl?.trim() || "";
-  const showImage = imageUrl.length > 0 && !imageFailed;
+  const fallbackImage = getFallbackImage(activity);
+  const imageSources = [
+    imageUrl.length > 0 ? imageUrl : null,
+    fallbackImage.photoSrc,
+    fallbackImage.backupSrc,
+  ].filter(Boolean) as string[];
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const displayImageSrc = imageSources[sourceIndex];
+  const usingOriginalImage = displayImageSrc === imageUrl && imageUrl.length > 0;
+  const showImage = Boolean(displayImageSrc);
   const formattedDate = capitalizeFirstLetter(
     detailedDateFormatter.format(activityDate),
   );
@@ -211,18 +442,21 @@ function ActivityCard({ activity }: { activity: Activity }) {
     : "Tid ej angiven";
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/5">
-      <div className="relative aspect-[16/10] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#fffaf4)]">
+    <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/8 transition duration-300 hover:-translate-y-1">
+      <div className="relative aspect-[16/10] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#eef4ef)]">
         {showImage ? (
-          // The scraped image hosts vary, so keep a plain img here instead of broad remote image allow-lists.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt={activity.title}
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-            loading="lazy"
-            onError={() => setImageFailed(true)}
-          />
+          <>
+            {/* Activity images come from multiple hosts, so use a plain img instead of broad remote image configuration. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={displayImageSrc}
+              alt={usingOriginalImage ? activity.title : `${fallbackImage.label} för ${activity.title}`}
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+              loading="lazy"
+              onError={() => setSourceIndex((current) => current + 1)}
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(17,29,24,0.08),rgba(17,29,24,0.54))]" />
+          </>
         ) : (
           <div className="flex h-full w-full flex-col justify-end bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),transparent_38%),linear-gradient(135deg,rgba(223,105,55,0.3),rgba(247,220,205,0.88)_60%,rgba(255,253,248,1))] p-5">
             <div className="max-w-[14rem] rounded-[1.5rem] bg-white/78 p-4 backdrop-blur-sm">
@@ -244,7 +478,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
               </span>
             ) : null}
             {categoryLabels.length > 0
-              ? categoryLabels.map((categoryLabel) => (
+              ? categoryLabels.slice(0, 2).map((categoryLabel) => (
                   <span
                     key={categoryLabel}
                     className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm"
@@ -280,16 +514,19 @@ function ActivityCard({ activity }: { activity: Activity }) {
             <p className="text-sm font-medium text-[color:var(--muted)]">
               {activity.location || "Plats kommer snart"}
             </p>
+            <p className="text-sm leading-6 text-[color:var(--muted)]">
+              {formatDescriptionSnippet(activity.description)}
+            </p>
           </div>
 
           <dl className="grid gap-3 text-sm text-[color:var(--foreground)] sm:grid-cols-2">
-            <div className="rounded-2xl bg-white/70 px-4 py-3">
+            <div className="rounded-2xl bg-[rgba(255,255,255,0.78)] px-4 py-3">
               <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
                 Datum
               </dt>
               <dd className="mt-1 font-medium">{formattedDate}</dd>
             </div>
-            <div className="rounded-2xl bg-white/70 px-4 py-3">
+            <div className="rounded-2xl bg-[rgba(255,255,255,0.78)] px-4 py-3">
               <dt className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
                 Tid
               </dt>
@@ -310,9 +547,9 @@ function ActivityCard({ activity }: { activity: Activity }) {
           </div>
 
           {registrationSummary ? (
-            <div className="rounded-2xl bg-white/70 px-4 py-3 text-sm">
+            <div className="rounded-2xl bg-[rgba(255,255,255,0.78)] px-4 py-3 text-sm">
               <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                {"Anmälan"}
+                Anmälan
               </p>
               <p className="mt-1 font-medium text-[color:var(--foreground)]">
                 {registrationSummary}
@@ -413,6 +650,15 @@ export function ActivityExplorer({
     );
   });
 
+  const openActivitiesCount = activities.filter(
+    (activity) => activity.registrationStatus === "Open",
+  ).length;
+  const freeActivitiesCount = activities.filter(
+    (activity) => activity.price <= 0,
+  ).length;
+  const featuredCities = cities.slice(0, 4);
+  const featuredCategories = categories.slice(0, 5);
+
   const clearFilters = () => {
     setSearch("");
     setSelectedCity("all");
@@ -424,97 +670,214 @@ export function ActivityExplorer({
   };
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-      <section className="overflow-hidden rounded-[2.5rem] border border-white/50 bg-[linear-gradient(135deg,rgba(255,248,235,0.95),rgba(247,226,212,0.92))] p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-8">
-        <div className="grid gap-8 lg:grid-cols-[1.6fr_1fr] lg:items-end">
-          <div className="space-y-5">
-            <span className="inline-flex rounded-full bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-strong)]">
-              Live API connection
+    <main className="relative mx-auto flex min-h-screen w-full max-w-[86rem] flex-col gap-8 overflow-hidden px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[44rem] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(223,105,55,0.22),transparent_20%),radial-gradient(circle_at_50%_58%,rgba(90,127,101,0.14),transparent_28%)]" />
+
+      <section className="relative overflow-hidden rounded-[2.8rem] border border-white/55 bg-[linear-gradient(135deg,rgba(255,247,237,0.95),rgba(255,252,247,0.9)_42%,rgba(237,245,239,0.92))] px-6 py-7 shadow-[0_30px_90px_-54px_rgba(15,34,24,0.6)] sm:px-8 sm:py-10">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.7),transparent_34%),linear-gradient(120deg,transparent_10%,rgba(255,255,255,0.18)_45%,transparent_68%)]" />
+        <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+          <div className="space-y-7">
+            <span className="inline-flex rounded-full border border-white/60 bg-white/78 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-strong)] shadow-sm backdrop-blur-sm">
+              Barnaktiviteter samlade på ett ställe
             </span>
-            <div className="space-y-4">
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-[color:var(--foreground)] sm:text-5xl">
-                Explore kids activities from the Barnaktiv backend.
+
+            <div className="space-y-5">
+              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-[color:var(--foreground)] sm:text-5xl xl:text-6xl">
+                Ge varje ledig dag något att längta till.
               </h1>
-              <p className="max-w-2xl text-base leading-7 text-[color:var(--muted)] sm:text-lg">
-                lets you filter by search, city, organizer, category, age, and price.
+              <p className="max-w-2xl text-base leading-8 text-[color:var(--muted)] sm:text-lg">
+                Barnaktiv samlar prova-på-pass, lovaktiviteter, kurser och
+                föreningsträffar så att du snabbt hittar rätt aktivitet för ditt
+                barn. Filtrera på stad, ålder, pris och anmälan utan att hoppa
+                mellan olika sidor.
               </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="#utforska"
+                className="rounded-full bg-[color:var(--foreground)] px-5 py-3 text-sm font-semibold text-[color:var(--background)] transition hover:translate-y-[-1px] hover:bg-[#16271d]"
+              >
+                Utforska aktiviteter
+              </Link>
+              <Link
+                href="#aktiviteter"
+                className="rounded-full border border-[color:var(--border)] bg-white/78 px-5 py-3 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-white"
+              >
+                Se alla kort
+              </Link>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[1.75rem] bg-[color:var(--foreground)] px-5 py-4 text-[color:var(--background)] shadow-[0_24px_60px_-38px_rgba(15,34,24,0.7)]">
+                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-white/70">
+                  Aktiviteter
+                </div>
+                <div className="mt-3 text-4xl font-semibold">{activities.length}</div>
+              </div>
+              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white/82 px-5 py-4 backdrop-blur-sm">
+                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                  Städer
+                </div>
+                <div className="mt-3 text-4xl font-semibold text-[color:var(--foreground)]">
+                  {cities.length}
+                </div>
+              </div>
+              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white/82 px-5 py-4 backdrop-blur-sm">
+                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                  Arrangörer
+                </div>
+                <div className="mt-3 text-4xl font-semibold text-[color:var(--foreground)]">
+                  {organizers.length}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--muted)]">
+              <span className="font-medium text-[color:var(--foreground)]">
+                Populärt just nu:
+              </span>
+              {featuredCategories.length > 0 ? (
+                featuredCategories.map((category) => (
+                  <span
+                    key={category}
+                    className="rounded-full border border-white/60 bg-white/72 px-3 py-1.5 shadow-sm backdrop-blur-sm"
+                  >
+                    {category}
+                  </span>
+                ))
+              ) : (
+                <span className="rounded-full border border-white/60 bg-white/72 px-3 py-1.5 shadow-sm backdrop-blur-sm">
+                  Nya aktiviteter laddas in löpande
+                </span>
+              )}
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-            <div className="rounded-[1.75rem] bg-[color:var(--foreground)] px-5 py-4 text-[color:var(--background)]">
-              <div className="text-sm uppercase tracking-[0.18em] text-white/70">
-                Available now
-              </div>
-              <div className="mt-3 text-4xl font-semibold">{activities.length}</div>
+          <HeroCollage
+            activities={activities}
+            openActivitiesCount={openActivitiesCount}
+            freeActivitiesCount={freeActivitiesCount}
+          />
+        </div>
+      </section>
+
+      {errorMessage ? (
+        <section className="rounded-[2rem] border border-amber-300 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm">
+          <p className="font-semibold">
+            Aktiviteterna kunde inte hämtas från backend just nu.
+          </p>
+          <p className="mt-1">
+            {errorMessage} Starta <code>Barnaktiv.API</code> eller sätt{" "}
+            <code>BARNAKTIV_API_BASE_URL</code> till rätt backendadress.
+          </p>
+        </section>
+      ) : null}
+
+      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-[rgba(255,255,255,0.76)] p-6 shadow-[var(--card-shadow)] shadow-black/5 backdrop-blur-sm sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
+            Enklare att välja rätt
+          </p>
+          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[color:var(--foreground)]">
+            En startsida som inspirerar innan du ens börjar filtrera.
+          </h2>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-[color:var(--muted)]">
+            I stället för en torr lista får du en varm, visuell översikt med
+            riktiga aktivitetsbilder, tydliga siffror och snabbvägar till det
+            som faktiskt betyder något för familjer: plats, ålder och om det
+            fortfarande finns chans att anmäla sig.
+          </p>
+        </div>
+
+        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-[linear-gradient(145deg,rgba(255,250,244,0.92),rgba(238,245,239,0.94))] p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
+            Lokalt och levande
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {featuredCities.length > 0 ? (
+              featuredCities.map((city) => (
+                <span
+                  key={city}
+                  className="rounded-full bg-white/80 px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm"
+                >
+                  {city}
+                </span>
+              ))
+            ) : (
+              <span className="rounded-full bg-white/80 px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm">
+                Fler städer fylls på när datan laddas
+              </span>
+            )}
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-[1.5rem] border border-white/60 bg-white/78 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                För familjer
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--foreground)]">
+                Hitta snabbt aktiviteter som passar barnets ålder och er vardag.
+              </p>
             </div>
-            <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white/80 px-5 py-4">
-              <div className="text-sm uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                Cities
-              </div>
-              <div className="mt-3 text-4xl font-semibold text-[color:var(--foreground)]">
-                {cities.length}
-              </div>
-            </div>
-            <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white/80 px-5 py-4">
-              <div className="text-sm uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                Categories
-              </div>
-              <div className="mt-3 text-4xl font-semibold text-[color:var(--foreground)]">
-                {categories.length}
-              </div>
+            <div className="rounded-[1.5rem] border border-white/60 bg-white/78 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                För arrangörer
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--foreground)]">
+                Visa upp utbudet i en miljö som gör det enkelt att bli vald.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-      {errorMessage ? (
-        <section className="rounded-[2rem] border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950">
-          <p className="font-semibold">Activities could not be loaded from the backend.</p>
-          <p className="mt-1">
-            {errorMessage} Start <code>Barnaktiv.API</code> or set <code>BARNAKTIV_API_BASE_URL</code> to the correct backend URL.
-          </p>
-        </section>
-      ) : null}
-
-      <section className="rounded-[2.25rem] border border-[color:var(--border)] bg-[color:var(--surface)] p-5 shadow-[var(--card-shadow)] shadow-black/5 sm:p-6">
+      <section
+        id="utforska"
+        className="rounded-[2.35rem] border border-[color:var(--border)] bg-[rgba(255,251,246,0.84)] p-5 shadow-[var(--card-shadow)] shadow-black/5 backdrop-blur-md sm:p-6"
+      >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight text-[color:var(--foreground)]">
-              Filters
+              Filtrera smart
             </h2>
-            <p className="mt-2 text-sm text-[color:var(--muted)]">
-              Narrow the activity list before adding more ingestion sources.
+            <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+              Snäva in listan efter plats, arrangör, sport, kategori, ålder och
+              pris så du slipper gissa dig fram.
             </p>
           </div>
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-full border border-[color:var(--border)] px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-white/80"
+            className="rounded-full border border-[color:var(--border)] bg-white/80 px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-white"
           >
-            Clear filters
+            Rensa filter
           </button>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1.7fr_repeat(6,minmax(0,1fr))]">
           <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">Search</span>
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Sök
+            </span>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Title, place, organizer..."
+              placeholder="Titel, plats, arrangör..."
               className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none ring-0 transition placeholder:text-[color:var(--muted)] focus:border-[color:var(--accent)]"
             />
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">City</span>
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Stad
+            </span>
             <select
               value={selectedCity}
               onChange={(event) => setSelectedCity(event.target.value)}
               className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
             >
-              <option value="all">All cities</option>
+              <option value="all">Alla städer</option>
               {cities.map((city) => (
                 <option key={city} value={city}>
                   {city}
@@ -525,14 +888,14 @@ export function ActivityExplorer({
 
           <label className="space-y-2">
             <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Organizer / club
+              Arrangör
             </span>
             <select
               value={selectedOrganizer}
               onChange={(event) => setSelectedOrganizer(event.target.value)}
               className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
             >
-              <option value="all">All organizers</option>
+              <option value="all">Alla arrangörer</option>
               {organizers.map((organizer) => (
                 <option key={organizer} value={organizer}>
                   {organizer}
@@ -542,13 +905,15 @@ export function ActivityExplorer({
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">Sport</span>
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Sport
+            </span>
             <select
               value={selectedSport}
               onChange={(event) => setSelectedSport(event.target.value)}
               className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
             >
-              <option value="all">All sports</option>
+              <option value="all">Alla sporter</option>
               {sports.map((sport) => (
                 <option key={sport} value={sport}>
                   {sport}
@@ -558,13 +923,15 @@ export function ActivityExplorer({
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">Category</span>
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Kategori
+            </span>
             <select
               value={selectedCategory}
               onChange={(event) => setSelectedCategory(event.target.value)}
               className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
             >
-              <option value="all">All categories</option>
+              <option value="all">Alla kategorier</option>
               {categories.map((category) => (
                 <option key={category} value={category}>
                   {category}
@@ -574,7 +941,9 @@ export function ActivityExplorer({
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">Age</span>
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Ålder
+            </span>
             <select
               value={selectedAgeGroup}
               onChange={(event) => setSelectedAgeGroup(event.target.value as AgeGroup)}
@@ -589,7 +958,9 @@ export function ActivityExplorer({
           </label>
 
           <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">Price</span>
+            <span className="text-sm font-medium text-[color:var(--foreground)]">
+              Pris
+            </span>
             <select
               value={selectedPrice}
               onChange={(event) => setSelectedPrice(event.target.value as PriceFilter)}
@@ -605,18 +976,18 @@ export function ActivityExplorer({
         </div>
       </section>
 
-      <section className="space-y-5">
+      <section id="aktiviteter" className="space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-2xl font-semibold tracking-tight text-[color:var(--foreground)]">
-              Activity cards
+              Aktiviteter att upptäcka
             </h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              {getResultSummary(filteredActivities.length)} after filtering.
+              {getResultSummary(filteredActivities.length)} efter dina val.
             </p>
           </div>
           <p className="text-sm text-[color:var(--muted)]">
-            Source ready for incremental scraping expansion.
+            Visar kort med bild, pris, ålder och anmälningsläge.
           </p>
         </div>
 
@@ -629,10 +1000,10 @@ export function ActivityExplorer({
         ) : (
           <div className="rounded-[2rem] border border-dashed border-[color:var(--border)] bg-white/60 px-6 py-12 text-center">
             <h3 className="text-xl font-semibold text-[color:var(--foreground)]">
-              No activities matched the current filters.
+              Inga aktiviteter matchade filtren.
             </h3>
             <p className="mt-3 text-sm leading-6 text-[color:var(--muted)]">
-              Reset the filters or start the backend if the API is not returning data yet.
+              Rensa filtren eller starta backend om API:t inte levererar data än.
             </p>
           </div>
         )}
