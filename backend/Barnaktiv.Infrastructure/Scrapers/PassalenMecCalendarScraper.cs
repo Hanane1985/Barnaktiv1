@@ -36,6 +36,15 @@ public sealed class PassalenMecCalendarScraper(HttpClient httpClient) : IActivit
     private static readonly Regex JsonLdRegex = new(
         "<script type=\"application/ld\\+json\">\\s*(?<json>.*?)\\s*</script>",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex EventCategoriesRegex = new(
+        "<dd[^>]*class=\"[^\"]*mec-events-event-categories[^\"]*\"[^>]*>(?<html>.*?)</dd>",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex AnchorTagRegex = new(
+        "<a\\b[^>]*>(?<text>.*?)</a>",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex HtmlTagRegex = new(
+        "<[^>]+>",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex DecimalRegex = new(
         @"(?<amount>\d+(?:[.,]\d+)?)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -55,13 +64,13 @@ public sealed class PassalenMecCalendarScraper(HttpClient httpClient) : IActivit
         "Schema:",
         "Dag:",
         "Tid:",
-        "M\u00f6tesplats:",
+        "Mötesplats:",
         "Adress:",
-        "N\u00e4rmaste h\u00e5llplats:",
+        "Närmaste hållplats:",
         "Kostnad:",
-        "\u00c5lder:",
+        "Ålder:",
         "Ledare:",
-        "Anm\u00e4lan:"
+        "Anmälan:"
     ];
 
     public string Kind => "passalen-mec-calendar-v1";
@@ -97,6 +106,7 @@ public sealed class PassalenMecCalendarScraper(HttpClient httpClient) : IActivit
         var errors = new List<string>();
         var items = new List<ScrapedActivityItem>();
         var discoveredExternalIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var categoryByWebsiteUrl = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var hadMonthErrors = false;
 
         for (var monthOffset = 0; monthOffset < maxMonthsToScan; monthOffset++)
@@ -136,7 +146,13 @@ public sealed class PassalenMecCalendarScraper(HttpClient httpClient) : IActivit
                     continue;
                 }
 
-                if (discoveredExternalIds.Add(item!.ExternalId))
+                item = await EnrichCategoryAsync(
+                    item!,
+                    categoryByWebsiteUrl,
+                    errors,
+                    cancellationToken);
+
+                if (discoveredExternalIds.Add(item.ExternalId))
                 {
                     items.Add(item);
                 }
@@ -155,6 +171,41 @@ public sealed class PassalenMecCalendarScraper(HttpClient httpClient) : IActivit
             errors,
             discoveredExternalIds.ToList(),
             scannedAllExposedMonths && !hadMonthErrors);
+    }
+
+    private async Task<ScrapedActivityItem> EnrichCategoryAsync(
+        ScrapedActivityItem item,
+        IDictionary<string, string> categoryByWebsiteUrl,
+        ICollection<string> errors,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(item.Category) ||
+            string.IsNullOrWhiteSpace(item.WebsiteUrl))
+        {
+            return item;
+        }
+
+        var websiteUrl = item.WebsiteUrl.Trim();
+
+        if (!categoryByWebsiteUrl.TryGetValue(websiteUrl, out var category))
+        {
+            var detailPageResult = await GetHtmlAsync(websiteUrl, cancellationToken);
+
+            if (!detailPageResult.IsSuccess)
+            {
+                errors.Add(
+                    $"Failed to fetch Passalen event detail '{websiteUrl}': {detailPageResult.ErrorMessage}");
+                categoryByWebsiteUrl[websiteUrl] = string.Empty;
+                return item;
+            }
+
+            category = ExtractCategories(detailPageResult.Content!);
+            categoryByWebsiteUrl[websiteUrl] = category;
+        }
+
+        return string.IsNullOrWhiteSpace(category)
+            ? item
+            : item with { Category = category };
     }
 
     private async Task<PageFetchResult> GetHtmlAsync(string url, CancellationToken cancellationToken)
@@ -542,6 +593,28 @@ public sealed class PassalenMecCalendarScraper(HttpClient httpClient) : IActivit
             out var amount)
             ? amount
             : 0m;
+    }
+
+    private static string ExtractCategories(string detailPageHtml)
+    {
+        var categoriesMatch = EventCategoriesRegex.Match(detailPageHtml);
+
+        if (!categoriesMatch.Success)
+        {
+            return string.Empty;
+        }
+
+        var categories = AnchorTagRegex.Matches(categoriesMatch.Groups["html"].Value)
+            .Select(match => NormalizeWhitespace(
+                WebUtility.HtmlDecode(
+                    HtmlTagRegex.Replace(match.Groups["text"].Value, " "))))
+            .Where(category => !string.IsNullOrWhiteSpace(category))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return categories.Count == 0
+            ? string.Empty
+            : string.Join(", ", categories);
     }
 
     private static (int AgeFrom, int AgeTo) InferAgeRange(string title, string description)

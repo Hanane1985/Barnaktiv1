@@ -183,10 +183,17 @@ function capitalizeFirstLetter(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function getCategoryLabels(categoryValue: string) {
+  return categoryValue
+    .split(",")
+    .map((category) => category.trim())
+    .filter(Boolean);
+}
+
 function ActivityCard({ activity }: { activity: Activity }) {
   const activityDate = new Date(activity.date);
   const [imageFailed, setImageFailed] = useState(false);
-  const categoryLabel = activity.category || "General";
+  const categoryLabels = getCategoryLabels(activity.category);
   const sportLabel = activity.sport || null;
   const cityLabel = activity.city || "Stad saknas";
   const organizerLabel = activity.organizer || "Arrangör kommer snart";
@@ -236,9 +243,16 @@ function ActivityCard({ activity }: { activity: Activity }) {
                 {sportLabel}
               </span>
             ) : null}
-            <span className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm">
-              {categoryLabel}
-            </span>
+            {categoryLabels.length > 0
+              ? categoryLabels.map((categoryLabel) => (
+                  <span
+                    key={categoryLabel}
+                    className="rounded-full bg-[color:var(--accent-soft)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm"
+                  >
+                    {categoryLabel}
+                  </span>
+                ))
+              : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <span className="rounded-full bg-white/88 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm backdrop-blur-sm">
@@ -356,7 +370,9 @@ export function ActivityExplorer({
     (left, right) => left.localeCompare(right),
   );
   const categories = Array.from(
-    new Set(activities.map((activity) => activity.category).filter(Boolean)),
+    new Set(
+      activities.flatMap((activity) => getCategoryLabels(activity.category)),
+    ),
   ).sort((left, right) => left.localeCompare(right));
 
   const filteredActivities = activities.filter((activity) => {
@@ -380,7 +396,8 @@ export function ActivityExplorer({
       selectedOrganizer === "all" || activity.organizer === selectedOrganizer;
     const matchesSport = selectedSport === "all" || activity.sport === selectedSport;
     const matchesCategory =
-      selectedCategory === "all" || activity.category === selectedCategory;
+      selectedCategory === "all" ||
+      getCategoryLabels(activity.category).includes(selectedCategory);
     const matchesPrice =
       selectedPrice === "all" ||
       (selectedPrice === "free" ? activity.price <= 0 : activity.price > 0);
