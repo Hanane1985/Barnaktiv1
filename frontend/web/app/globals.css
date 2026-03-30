@@ -3,7 +3,7 @@
 :root {
   --background: #f7efe2;
   --foreground: #243127;
-  --surface: rgba(255, 251, 245, 0.9);
+  --surface: #fff9f2;
   --surface-strong: #fffdf8;
   --muted: #607063;
   --border: rgba(62, 79, 66, 0.14);
@@ -33,53 +33,17 @@
 }
 
 html {
-  background:
-    radial-gradient(circle at 16% 0%, rgba(255, 255, 255, 0.95), transparent 28%),
-    radial-gradient(circle at 100% 10%, rgba(223, 105, 55, 0.18), transparent 24%),
-    radial-gradient(circle at 50% 100%, rgba(74, 113, 90, 0.12), transparent 26%),
-    linear-gradient(180deg, #fff6ea 0%, #f8efdf 38%, #eef4ed 100%);
+  background: linear-gradient(180deg, #fff7ed 0%, #f8efe1 52%, #f4ede3 100%);
 }
 
 body {
-  position: relative;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.74), transparent 25%),
-    radial-gradient(circle at 90% 15%, rgba(223, 105, 55, 0.16), transparent 20%),
-    radial-gradient(circle at 50% 100%, rgba(88, 124, 98, 0.12), transparent 30%),
-    linear-gradient(
-      180deg,
-      rgba(255, 249, 241, 0.74),
-      rgba(244, 237, 228, 0.9)
-    ),
-    var(--background);
+  background: linear-gradient(180deg, #fff8f0 0%, #f7efe2 100%);
   color: var(--foreground);
   font-family: var(--font-brand-sans);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 20% 14%, rgba(255, 255, 255, 0.3), transparent 16%),
-    linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.18) 42%, transparent 68%);
-  opacity: 0.9;
-}
-
-body::after {
-  content: "";
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 16rem;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 250, 244, 0.5));
 }
 
 a {

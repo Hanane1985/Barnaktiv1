@@ -283,8 +283,49 @@ function getHeroActivities(activities: Activity[]) {
   const withoutImages = allActivities.filter(
     (activity) => !activity.imageUrl?.trim(),
   );
+  const selectedActivities: Activity[] = [];
+  const selectedIds = new Set<string>();
+  const usedOrganizers = new Set<string>();
 
-  return [...withImages, ...withoutImages].slice(0, 3);
+  const tryAddActivity = (activity: Activity) => {
+    if (selectedIds.has(activity.id)) {
+      return false;
+    }
+
+    const organizerKey =
+      normalizeMatchingText(activity.organizer || "").trim() || "__unknown__";
+
+    if (usedOrganizers.has(organizerKey)) {
+      return false;
+    }
+
+    selectedActivities.push(activity);
+    selectedIds.add(activity.id);
+    usedOrganizers.add(organizerKey);
+
+    return selectedActivities.length >= 3;
+  };
+
+  for (const activity of [...withImages, ...withoutImages]) {
+    if (tryAddActivity(activity)) {
+      return selectedActivities;
+    }
+  }
+
+  for (const activity of [...withImages, ...withoutImages]) {
+    if (selectedIds.has(activity.id)) {
+      continue;
+    }
+
+    selectedActivities.push(activity);
+    selectedIds.add(activity.id);
+
+    if (selectedActivities.length >= 3) {
+      break;
+    }
+  }
+
+  return selectedActivities;
 }
 
 function FeaturedImageCard({
@@ -309,14 +350,15 @@ function FeaturedImageCard({
     ? activity.sport || getCategoryLabels(activity.category)[0] || "Barnaktiv"
     : "Barnaktiv";
   const cityLabel = activity?.city || activity?.location || "Nära dig";
+  const organizerLabel = activity?.organizer || "Flera arrangörer";
   const title = activity?.title || "Aktiviteter som väcker nyfikenhet";
   const supportingText = activity
-    ? `${cityLabel} / ${formatAgeRange(activity)}`
+    ? `${organizerLabel} / ${formatAgeRange(activity)}`
     : "Filtrera på ålder, plats och pris och hitta rätt snabbare.";
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[2rem] border border-white/45 bg-[linear-gradient(160deg,rgba(255,243,231,0.95),rgba(255,255,255,0.86)_52%,rgba(236,245,239,0.92))] shadow-[0_24px_70px_-36px_rgba(15,34,24,0.55)] ${className}`}
+      className={`relative overflow-hidden rounded-[2rem] border border-white/70 bg-[#fff8f1] shadow-[0_24px_70px_-36px_rgba(15,34,24,0.45)] ${className}`}
     >
       {showImage ? (
         <>
@@ -336,11 +378,11 @@ function FeaturedImageCard({
       )}
 
       <div className="relative flex h-full min-h-[14rem] flex-col justify-between p-5">
-        <span className="inline-flex w-fit rounded-full border border-white/30 bg-white/80 px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)] backdrop-blur-sm">
+        <span className="inline-flex w-fit rounded-full border border-white/40 bg-white px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)]">
           {categoryLabel}
         </span>
 
-        <div className="max-w-[18rem] rounded-[1.6rem] border border-white/20 bg-[rgba(16,30,24,0.58)] p-4 text-white shadow-lg backdrop-blur-md">
+        <div className="max-w-[18rem] rounded-[1.6rem] border border-white/25 bg-[rgba(16,30,24,0.76)] p-4 text-white shadow-lg">
           <p className="text-xs uppercase tracking-[0.18em] text-white/70">
             {cityLabel}
           </p>
@@ -364,31 +406,25 @@ function HeroCollage({
   freeActivitiesCount: number;
 }) {
   const heroActivities = getHeroActivities(activities);
+  const collageActivities =
+    heroActivities.length >= 3 ? heroActivities.slice(1, 3) : heroActivities.slice(0, 2);
 
   return (
-    <div className="relative min-h-[28rem] lg:min-h-[35rem]">
-      <div className="pointer-events-none absolute -left-8 top-10 h-32 w-32 rounded-full bg-white/70 blur-3xl" />
-      <div className="pointer-events-none absolute right-0 top-0 h-48 w-48 rounded-full bg-[rgba(224,116,58,0.24)] blur-3xl" />
+    <div className="relative min-h-[24rem] lg:min-h-[31rem]">
+      <div className="pointer-events-none absolute -left-8 top-10 h-24 w-24 rounded-full bg-white/45 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-0 h-36 w-36 rounded-full bg-[rgba(224,116,58,0.14)] blur-3xl" />
 
-      <div className="grid h-full gap-4 sm:grid-cols-2 sm:grid-rows-[1.15fr_0.85fr]">
-        <FeaturedImageCard
-          key={heroActivities[0]?.id ?? "hero-primary"}
-          activity={heroActivities[0]}
-          className="sm:row-span-2 min-h-[20rem] sm:min-h-[35rem]"
-        />
-        <FeaturedImageCard
-          key={heroActivities[1]?.id ?? "hero-secondary"}
-          activity={heroActivities[1]}
-          className="min-h-[15rem]"
-        />
-        <FeaturedImageCard
-          key={heroActivities[2]?.id ?? "hero-tertiary"}
-          activity={heroActivities[2]}
-          className="min-h-[15rem]"
-        />
+      <div className="grid h-full gap-4 sm:grid-cols-2">
+        {collageActivities.map((activity, index) => (
+          <FeaturedImageCard
+            key={activity?.id ?? `hero-card-${index}`}
+            activity={activity}
+            className="min-h-[18rem] sm:min-h-[31rem]"
+          />
+        ))}
       </div>
 
-      <div className="absolute -bottom-5 left-5 right-5 rounded-[1.7rem] border border-white/55 bg-white/80 p-4 shadow-[0_18px_40px_-30px_rgba(15,34,24,0.55)] backdrop-blur-md sm:left-auto sm:right-8 sm:w-[18rem]">
+      <div className="absolute -bottom-5 left-5 right-5 rounded-[1.7rem] border border-white/70 bg-white p-4 shadow-[0_18px_40px_-30px_rgba(15,34,24,0.38)] sm:left-auto sm:right-8 sm:w-[18rem]">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--accent-strong)]">
           Just nu i Barnaktiv
         </p>
@@ -443,7 +479,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/8 transition duration-300 hover:-translate-y-1">
-      <div className="relative aspect-[16/10] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#eef4ef)]">
+      <div className="relative aspect-[16/10] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#f6f0e6)]">
         {showImage ? (
           <>
             {/* Activity images come from multiple hosts, so use a plain img instead of broad remote image configuration. */}
@@ -459,7 +495,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
           </>
         ) : (
           <div className="flex h-full w-full flex-col justify-end bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),transparent_38%),linear-gradient(135deg,rgba(223,105,55,0.3),rgba(247,220,205,0.88)_60%,rgba(255,253,248,1))] p-5">
-            <div className="max-w-[14rem] rounded-[1.5rem] bg-white/78 p-4 backdrop-blur-sm">
+            <div className="max-w-[14rem] rounded-[1.5rem] bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)]">
                 Barnaktiv
               </p>
@@ -489,12 +525,12 @@ function ActivityCard({ activity }: { activity: Activity }) {
               : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <span className="rounded-full bg-white/88 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm backdrop-blur-sm">
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm">
               {formatPrice(activity.price)}
             </span>
             {registrationSummary ? (
               <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] shadow-sm backdrop-blur-sm ${getRegistrationBadgeClassName(
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] shadow-sm ${getRegistrationBadgeClassName(
                   registrationStatus,
                 )}`}
               >
@@ -671,13 +707,12 @@ export function ActivityExplorer({
 
   return (
     <main className="relative mx-auto flex min-h-screen w-full max-w-[86rem] flex-col gap-8 overflow-hidden px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[44rem] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.72),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(223,105,55,0.22),transparent_20%),radial-gradient(circle_at_50%_58%,rgba(90,127,101,0.14),transparent_28%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[30rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.35),transparent)]" />
 
-      <section className="relative overflow-hidden rounded-[2.8rem] border border-white/55 bg-[linear-gradient(135deg,rgba(255,247,237,0.95),rgba(255,252,247,0.9)_42%,rgba(237,245,239,0.92))] px-6 py-7 shadow-[0_30px_90px_-54px_rgba(15,34,24,0.6)] sm:px-8 sm:py-10">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.7),transparent_34%),linear-gradient(120deg,transparent_10%,rgba(255,255,255,0.18)_45%,transparent_68%)]" />
+      <section className="relative overflow-hidden rounded-[2.8rem] border border-white/70 bg-[#fff9f2] px-6 py-7 shadow-[0_30px_90px_-54px_rgba(15,34,24,0.42)] sm:px-8 sm:py-10">
         <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="space-y-7">
-            <span className="inline-flex rounded-full border border-white/60 bg-white/78 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-strong)] shadow-sm backdrop-blur-sm">
+            <span className="inline-flex rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-strong)] shadow-sm">
               Barnaktiviteter samlade på ett ställe
             </span>
 
@@ -702,7 +737,7 @@ export function ActivityExplorer({
               </Link>
               <Link
                 href="#aktiviteter"
-                className="rounded-full border border-[color:var(--border)] bg-white/78 px-5 py-3 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-white"
+                className="rounded-full border border-[color:var(--border)] bg-white px-5 py-3 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
               >
                 Se alla kort
               </Link>
@@ -715,7 +750,7 @@ export function ActivityExplorer({
                 </div>
                 <div className="mt-3 text-4xl font-semibold">{activities.length}</div>
               </div>
-              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white/82 px-5 py-4 backdrop-blur-sm">
+              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white px-5 py-4">
                 <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
                   Städer
                 </div>
@@ -723,7 +758,7 @@ export function ActivityExplorer({
                   {cities.length}
                 </div>
               </div>
-              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white/82 px-5 py-4 backdrop-blur-sm">
+              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white px-5 py-4">
                 <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
                   Arrangörer
                 </div>
@@ -741,13 +776,13 @@ export function ActivityExplorer({
                 featuredCategories.map((category) => (
                   <span
                     key={category}
-                    className="rounded-full border border-white/60 bg-white/72 px-3 py-1.5 shadow-sm backdrop-blur-sm"
+                    className="rounded-full border border-white/70 bg-white px-3 py-1.5 shadow-sm"
                   >
                     {category}
                   </span>
                 ))
               ) : (
-                <span className="rounded-full border border-white/60 bg-white/72 px-3 py-1.5 shadow-sm backdrop-blur-sm">
+                <span className="rounded-full border border-white/70 bg-white px-3 py-1.5 shadow-sm">
                   Nya aktiviteter laddas in löpande
                 </span>
               )}
@@ -775,7 +810,7 @@ export function ActivityExplorer({
       ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-[rgba(255,255,255,0.76)] p-6 shadow-[var(--card-shadow)] shadow-black/5 backdrop-blur-sm sm:p-7">
+        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-white p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
             Enklare att välja rätt
           </p>
@@ -790,7 +825,7 @@ export function ActivityExplorer({
           </p>
         </div>
 
-        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-[linear-gradient(145deg,rgba(255,250,244,0.92),rgba(238,245,239,0.94))] p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-7">
+        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-[#fffaf4] p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-7">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
             Lokalt och levande
           </p>
@@ -799,20 +834,20 @@ export function ActivityExplorer({
               featuredCities.map((city) => (
                 <span
                   key={city}
-                  className="rounded-full bg-white/80 px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm"
+                  className="rounded-full bg-white px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm"
                 >
                   {city}
                 </span>
               ))
             ) : (
-              <span className="rounded-full bg-white/80 px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm">
+              <span className="rounded-full bg-white px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm">
                 Fler städer fylls på när datan laddas
               </span>
             )}
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-white/60 bg-white/78 p-4">
+            <div className="rounded-[1.5rem] border border-white/70 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
                 För familjer
               </p>
@@ -820,7 +855,7 @@ export function ActivityExplorer({
                 Hitta snabbt aktiviteter som passar barnets ålder och er vardag.
               </p>
             </div>
-            <div className="rounded-[1.5rem] border border-white/60 bg-white/78 p-4">
+            <div className="rounded-[1.5rem] border border-white/70 bg-white p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
                 För arrangörer
               </p>
@@ -834,7 +869,7 @@ export function ActivityExplorer({
 
       <section
         id="utforska"
-        className="rounded-[2.35rem] border border-[color:var(--border)] bg-[rgba(255,251,246,0.84)] p-5 shadow-[var(--card-shadow)] shadow-black/5 backdrop-blur-md sm:p-6"
+        className="rounded-[2.35rem] border border-[color:var(--border)] bg-white p-5 shadow-[var(--card-shadow)] shadow-black/5 sm:p-6"
       >
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -849,7 +884,7 @@ export function ActivityExplorer({
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-full border border-[color:var(--border)] bg-white/80 px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-white"
+            className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
           >
             Rensa filter
           </button>
@@ -998,7 +1033,7 @@ export function ActivityExplorer({
             ))}
           </div>
         ) : (
-          <div className="rounded-[2rem] border border-dashed border-[color:var(--border)] bg-white/60 px-6 py-12 text-center">
+          <div className="rounded-[2rem] border border-dashed border-[color:var(--border)] bg-white px-6 py-12 text-center">
             <h3 className="text-xl font-semibold text-[color:var(--foreground)]">
               Inga aktiviteter matchade filtren.
             </h3>
