@@ -8,23 +8,41 @@ namespace Barnaktiv.Infrastructure.Repositories;
 public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
     : IActivityIngestionRepository
 {
-    public async Task<Activity?> GetBySourceKeyAndExternalIdAsync(
+    public async Task<IReadOnlyDictionary<string, Activity>> GetBySourceKeyAndExternalIdsAsync(
         string sourceKey,
-        string externalId,
+        IReadOnlyCollection<string> externalIds,
         CancellationToken cancellationToken)
     {
-        var trackedActivity = dbContext.Activities.Local.FirstOrDefault(activity =>
-            activity.SourceKey == sourceKey && activity.ExternalId == externalId);
-
-        if (trackedActivity is not null)
+        if (externalIds.Count == 0)
         {
-            return trackedActivity;
+            return new Dictionary<string, Activity>(StringComparer.OrdinalIgnoreCase);
         }
 
-        return await dbContext.Activities.FirstOrDefaultAsync(activity =>
-            activity.SourceKey == sourceKey &&
-            activity.ExternalId == externalId,
-            cancellationToken);
+        var activitiesByExternalId = dbContext.Activities.Local
+            .Where(activity => activity.SourceKey == sourceKey)
+            .Where(activity => externalIds.Contains(activity.ExternalId))
+            .ToDictionary(
+                activity => activity.ExternalId,
+                StringComparer.OrdinalIgnoreCase);
+        var remainingExternalIds = externalIds
+            .Where(externalId => !activitiesByExternalId.ContainsKey(externalId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        foreach (var externalIdChunk in remainingExternalIds.Chunk(500))
+        {
+            var chunkActivities = await dbContext.Activities
+                .Where(activity => activity.SourceKey == sourceKey)
+                .Where(activity => externalIdChunk.Contains(activity.ExternalId))
+                .ToListAsync(cancellationToken);
+
+            foreach (var activity in chunkActivities)
+            {
+                activitiesByExternalId[activity.ExternalId] = activity;
+            }
+        }
+
+        return activitiesByExternalId;
     }
 
     public async Task AddActivityAsync(Activity activity, CancellationToken cancellationToken)

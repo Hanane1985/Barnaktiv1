@@ -4,9 +4,9 @@ namespace Barnaktiv.Application.Interfaces;
 
 public interface IActivityIngestionRepository
 {
-    Task<Activity?> GetBySourceKeyAndExternalIdAsync(
+    Task<IReadOnlyDictionary<string, Activity>> GetBySourceKeyAndExternalIdsAsync(
         string sourceKey,
-        string externalId,
+        IReadOnlyCollection<string> externalIds,
         CancellationToken cancellationToken);
 
     Task AddActivityAsync(Activity activity, CancellationToken cancellationToken);

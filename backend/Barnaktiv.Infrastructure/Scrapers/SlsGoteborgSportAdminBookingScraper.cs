@@ -11,12 +11,13 @@ namespace Barnaktiv.Infrastructure.Scrapers;
 
 public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) : IActivityScraper
 {
-    private const string Organizer = "SLS G\u00f6teborg";
-    private const string City = "G\u00f6teborg";
+    private const string Organizer = "SLS Göteborg";
+    private const string City = "Göteborg";
+    private const int DetailRequestConcurrency = 8;
 
-    private static readonly Regex GroupRowRegex = new(
-        "<div class='grupplist-row' id='grupp(?<id>\\d+)'.*?<h4>(?<title>.*?)</h4>.*?<div class=\"resp-small-label\">\u00c5lder:</div>\\s*(?<age>.*?)\\s*</div>.*?<div class=\"resp-small-label\">Plats:</div>\\s*(?<place>.*?)\\s*</div>.*?<div class=\"resp-small-label\">\u00d6ppnas:</div>\\s*(?<open>.*?)\\s*</div>.*?<div class=\"grupplist-statusbox [^\"]+\">\\s*(?<status>.*?)\\s*</div>.*?(?:(?<spots>\\d+)\\s+platser\\s+kvar)?",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    private static readonly Regex GroupRowStartRegex = new(
+        "<div class='grupplist-row' id='grupp(?<id>\\d+)'",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
     private static readonly Regex SectionRegex = new(
         "<div id='grupptyp\\d+'[^>]*>.*?<h3>(?<title>.*?)</h3>\\s*(?:<div class=\"grupptyp-desc\">(?<description>.*?)</div>)?",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -77,22 +78,79 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
         var groupsUrl = $"https://sportadmin.se/book/loadGroups.asp?F={formId}";
         var groupsHtml = await GetHtmlAsync(groupsUrl, cancellationToken);
         var sectionMatches = SectionRegex.Matches(groupsHtml);
+        var summaries = new List<GroupSummary>();
         var items = new List<ScrapedActivityItem>();
         var errors = new List<string>();
 
-        foreach (Match rowMatch in GroupRowRegex.Matches(groupsHtml))
+        var rowMatches = GroupRowStartRegex.Matches(groupsHtml);
+
+        for (var rowIndex = 0; rowIndex < rowMatches.Count; rowIndex++)
         {
-            var summary = ParseSummary(rowMatch, sectionMatches);
+            var rowMatch = rowMatches[rowIndex];
+            var rowEndIndex = rowIndex < rowMatches.Count - 1
+                ? rowMatches[rowIndex + 1].Index
+                : groupsHtml.Length;
+            var summary = ParseSummary(rowMatch, rowEndIndex, sectionMatches, groupsHtml);
 
             if (summary is null || !IsPotentiallyRelevant(summary))
             {
                 continue;
             }
+            summaries.Add(summary);
+        }
 
-            var detailUrl = $"https://sportadmin.se/book/?F={formId}&grupp={summary.GroupId}";
-            var detailContentUrl =
-                $"https://sportadmin.se/book/bookPageController_paymentservice.asp?F={formId}&grupp={summary.GroupId}&subaction=";
+        using var detailSemaphore = new SemaphoreSlim(DetailRequestConcurrency);
+        var processedGroups = await Task.WhenAll(
+            summaries.Select(summary =>
+                ProcessGroupAsync(
+                    source,
+                    formId,
+                    groupsUrl,
+                    summary,
+                    detailSemaphore,
+                    cancellationToken)));
 
+        foreach (var processedGroup in processedGroups)
+        {
+            if (processedGroup.Item is not null)
+            {
+                items.Add(processedGroup.Item);
+            }
+
+            if (processedGroup.Errors.Count > 0)
+            {
+                errors.AddRange(processedGroup.Errors);
+            }
+        }
+
+        if (items.Count == 0)
+        {
+            errors.Add("No child-targeted SportAdmin booking activities could be parsed from the SLS G\u00f6teborg booking page.");
+        }
+
+        return new ScrapeResult(
+            items,
+            errors,
+            items.Select(item => item.ExternalId).ToList(),
+            items.Count > 0);
+    }
+
+    private async Task<ProcessedGroupResult> ProcessGroupAsync(
+        ConfiguredIngestionSource source,
+        string formId,
+        string groupsUrl,
+        GroupSummary summary,
+        SemaphoreSlim detailSemaphore,
+        CancellationToken cancellationToken)
+    {
+        var detailUrl = $"https://sportadmin.se/book/?F={formId}&grupp={summary.GroupId}";
+        var detailContentUrl =
+            $"https://sportadmin.se/book/bookPageController_paymentservice.asp?F={formId}&grupp={summary.GroupId}&subaction=";
+
+        await detailSemaphore.WaitAsync(cancellationToken);
+
+        try
+        {
             GroupDetail detail;
 
             try
@@ -102,8 +160,9 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
             }
             catch (Exception exception)
             {
-                errors.Add($"Group '{summary.GroupId}' could not be fetched: {exception.Message}");
-                continue;
+                return new ProcessedGroupResult(
+                    null,
+                    [$"Group '{summary.GroupId}' could not be fetched: {exception.Message}"]);
             }
 
             var activityDate = detail.StartDate ?? DateTime.Today;
@@ -111,14 +170,14 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
 
             if (!IsChildTargeted(summary, detail, ageRange))
             {
-                continue;
+                return ProcessedGroupResult.Empty;
             }
 
             if (ageRange is null)
             {
-                errors.Add(
-                    $"Group '{summary.GroupId}' looked child-targeted but had no parseable age range.");
-                continue;
+                return new ProcessedGroupResult(
+                    null,
+                    [$"Group '{summary.GroupId}' looked child-targeted but had no parseable age range."]);
             }
 
             var registrationOpenAt = TryParseOpenAt(summary.OpenText, activityDate);
@@ -135,40 +194,35 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
             var sport = ResolveSport(summary, detail);
             var category = ResolveCategory(summary.SectionTitle, title);
 
-            items.Add(new ScrapedActivityItem(
-                $"sls-goteborg-sportadmin-{summary.GroupId}",
-                title,
-                description,
-                Organizer,
-                location,
-                City,
-                ageRange.Value.AgeFrom,
-                ageRange.Value.AgeTo,
-                category,
-                activityDate,
-                price,
-                detailUrl,
-                string.Empty,
-                CreateRawPayload(source.EndpointUrl, groupsUrl, detailUrl, summary, detail, registrationStatus),
-                false,
-                sport,
-                ActivityListingType.Program,
-                registrationStatus,
-                registrationOpenAt,
-                registrationCloseAt,
-                detailUrl));
+            return new ProcessedGroupResult(
+                new ScrapedActivityItem(
+                    $"sls-goteborg-sportadmin-{summary.GroupId}",
+                    title,
+                    description,
+                    Organizer,
+                    location,
+                    City,
+                    ageRange.Value.AgeFrom,
+                    ageRange.Value.AgeTo,
+                    category,
+                    activityDate,
+                    price,
+                    detailUrl,
+                    string.Empty,
+                    CreateRawPayload(source.EndpointUrl, groupsUrl, detailUrl, summary, detail, registrationStatus),
+                    false,
+                    sport,
+                    ActivityListingType.Program,
+                    registrationStatus,
+                    registrationOpenAt,
+                    registrationCloseAt,
+                    detailUrl),
+                []);
         }
-
-        if (items.Count == 0)
+        finally
         {
-            errors.Add("No child-targeted SportAdmin booking activities could be parsed from the SLS G\u00f6teborg booking page.");
+            detailSemaphore.Release();
         }
-
-        return new ScrapeResult(
-            items,
-            errors,
-            items.Select(item => item.ExternalId).ToList(),
-            items.Count > 0);
     }
 
     private async Task<string> ResolveFormIdAsync(string endpointUrl, CancellationToken cancellationToken)
@@ -204,14 +258,19 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
         return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 
-    private static GroupSummary? ParseSummary(Match rowMatch, MatchCollection sectionMatches)
+    private static GroupSummary? ParseSummary(
+        Match rowMatch,
+        int rowEndIndex,
+        MatchCollection sectionMatches,
+        string groupsHtml)
     {
         if (!rowMatch.Success)
         {
             return null;
         }
 
-        var title = CleanText(rowMatch.Groups["title"].Value);
+        var rowHtml = groupsHtml[rowMatch.Index..rowEndIndex];
+        var title = ExtractValue(rowHtml, "<h4>(?<value>.*?)</h4>");
 
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -219,11 +278,21 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
         }
 
         var section = ResolveSection(rowMatch.Index, sectionMatches);
-        var ageText = CleanText(rowMatch.Groups["age"].Value);
-        var placeText = CleanText(rowMatch.Groups["place"].Value);
-        var openText = CleanText(rowMatch.Groups["open"].Value);
-        var statusText = CleanText(rowMatch.Groups["status"].Value);
-        var spotsText = CleanText(rowMatch.Groups["spots"].Value);
+        var ageText = ExtractValue(
+            rowHtml,
+            "<div class=\"resp-small-label\">\\s*\u00c5lder:\\s*</div>\\s*(?<value>.*?)\\s*</div>");
+        var placeText = ExtractValue(
+            rowHtml,
+            "<div class=\"resp-small-label\">\\s*Plats:\\s*</div>\\s*(?<value>.*?)\\s*</div>");
+        var openText = ExtractValue(
+            rowHtml,
+            "<div class=\"resp-small-label\">\\s*\u00d6ppnas:\\s*</div>\\s*(?<value>.*?)\\s*</div>");
+        var statusText = ExtractValue(
+            rowHtml,
+            "<div class=\"grupplist-statusbox [^\"]+\">\\s*(?<value>.*?)\\s*</div>");
+        var spotsText = ExtractValue(
+            rowHtml,
+            "(?<value>\\d+)\\s+platser\\s+kvar");
 
         return new GroupSummary(
             rowMatch.Groups["id"].Value,
@@ -780,4 +849,11 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
         DateTime? StartDate,
         DateTime? CloseAt,
         decimal? Price);
+
+    private sealed record ProcessedGroupResult(
+        ScrapedActivityItem? Item,
+        IReadOnlyList<string> Errors)
+    {
+        public static readonly ProcessedGroupResult Empty = new(null, []);
+    }
 }

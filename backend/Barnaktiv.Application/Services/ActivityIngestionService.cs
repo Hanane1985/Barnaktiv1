@@ -77,17 +77,19 @@ public sealed class ActivityIngestionService(
                     .Select(item => item.ExternalId)
                     .ToList())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingActivitiesByExternalId = new Dictionary<string, Activity>(
+                await repository.GetBySourceKeyAndExternalIdsAsync(
+                    source.SourceKey,
+                    seenExternalIds,
+                    cancellationToken),
+                StringComparer.OrdinalIgnoreCase);
             var pendingChanges = 0;
 
             foreach (var item in scrapeResult.Items)
             {
                 var now = DateTime.UtcNow;
-                var existingActivity = await repository.GetBySourceKeyAndExternalIdAsync(
-                    source.SourceKey,
-                    item.ExternalId,
-                    cancellationToken);
 
-                if (existingActivity is null)
+                if (!existingActivitiesByExternalId.TryGetValue(item.ExternalId, out var existingActivity))
                 {
                     var activity = new Activity
                     {
@@ -102,6 +104,7 @@ public sealed class ActivityIngestionService(
                     activity.LastSeenAt = now;
 
                     await repository.AddActivityAsync(activity, cancellationToken);
+                    existingActivitiesByExternalId[item.ExternalId] = activity;
                     activitiesCreated++;
                 }
                 else
