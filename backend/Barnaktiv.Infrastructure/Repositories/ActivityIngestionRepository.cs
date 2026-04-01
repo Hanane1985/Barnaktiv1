@@ -13,36 +13,24 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
         IReadOnlyCollection<string> externalIds,
         CancellationToken cancellationToken)
     {
-        if (externalIds.Count == 0)
+        var externalIdSet = CreateExternalIdSet(externalIds);
+
+        if (externalIdSet.Count == 0)
         {
             return new Dictionary<string, Activity>(StringComparer.OrdinalIgnoreCase);
         }
 
-        var activitiesByExternalId = dbContext.Activities.Local
+        // Loading one source at a time avoids translating large external-id sets into
+        // expensive SQL `IN`/`OPENJSON` predicates, which was timing out during ingestion.
+        var sourceActivities = await dbContext.Activities
             .Where(activity => activity.SourceKey == sourceKey)
-            .Where(activity => externalIds.Contains(activity.ExternalId))
+            .ToListAsync(cancellationToken);
+
+        return sourceActivities
+            .Where(activity => externalIdSet.Contains(activity.ExternalId))
             .ToDictionary(
                 activity => activity.ExternalId,
                 StringComparer.OrdinalIgnoreCase);
-        var remainingExternalIds = externalIds
-            .Where(externalId => !activitiesByExternalId.ContainsKey(externalId))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-
-        foreach (var externalIdChunk in remainingExternalIds.Chunk(500))
-        {
-            var chunkActivities = await dbContext.Activities
-                .Where(activity => activity.SourceKey == sourceKey)
-                .Where(activity => externalIdChunk.Contains(activity.ExternalId))
-                .ToListAsync(cancellationToken);
-
-            foreach (var activity in chunkActivities)
-            {
-                activitiesByExternalId[activity.ExternalId] = activity;
-            }
-        }
-
-        return activitiesByExternalId;
     }
 
     public async Task AddActivityAsync(Activity activity, CancellationToken cancellationToken)
@@ -62,10 +50,13 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
         IReadOnlyCollection<string> externalIds,
         CancellationToken cancellationToken)
     {
-        var activitiesToRemove = await dbContext.Activities
+        var externalIdSet = CreateExternalIdSet(externalIds);
+        var sourceActivities = await dbContext.Activities
             .Where(activity => activity.SourceKey == sourceKey)
-            .Where(activity => !externalIds.Contains(activity.ExternalId))
             .ToListAsync(cancellationToken);
+        var activitiesToRemove = sourceActivities
+            .Where(activity => !externalIdSet.Contains(activity.ExternalId))
+            .ToList();
 
         if (activitiesToRemove.Count == 0)
         {
@@ -78,5 +69,13 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         return dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private static HashSet<string> CreateExternalIdSet(IReadOnlyCollection<string> externalIds)
+    {
+        return externalIds
+            .Where(externalId => !string.IsNullOrWhiteSpace(externalId))
+            .Select(externalId => externalId.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 }
