@@ -6,9 +6,11 @@ namespace Barnaktiv.Application.Services;
 
 public sealed class ActivityService(IActivityRepository repository) : IActivityService
 {
-    public async Task<IReadOnlyList<ActivityDto>> GetAllAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ActivityDto>> GetAllAsync(
+        ActivityQueryDto query,
+        CancellationToken cancellationToken)
     {
-        var activities = await repository.GetAllOrderedByDateAsync(cancellationToken);
+        var activities = await repository.GetAllAsync(query, cancellationToken);
         return activities.Select(Map).ToList();
     }
 

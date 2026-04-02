@@ -8,12 +8,16 @@ namespace Barnaktiv.API.Controllers;
 [Route("api/[controller]")]
 public sealed class ActivitiesController(IActivityService activityService) : ControllerBase
 {
-    /// <summary>Returns all activities ordered by date.</summary>
+    /// <summary>Returns activities with optional filtering and sorting.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<ActivityDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<ActivityDto>>> GetAll(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<ActivityDto>>> GetAll(
+        [FromQuery] ActivityQueryDto? query,
+        CancellationToken cancellationToken)
     {
-        var activities = await activityService.GetAllAsync(cancellationToken);
+        var activities = await activityService.GetAllAsync(
+            query ?? new ActivityQueryDto(),
+            cancellationToken);
         return Ok(activities);
     }
 }
