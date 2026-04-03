@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text.RegularExpressions;
 using Barnaktiv.Application.DTOs.Activities;
 using Barnaktiv.Application.Interfaces;
 using Barnaktiv.Domain.Entities;
@@ -17,24 +19,53 @@ public sealed class ActivityService(IActivityRepository repository) : IActivityS
     private static ActivityDto Map(Activity activity) =>
         new(
             activity.Id,
-            activity.Title,
-            activity.Description,
-            activity.Organizer,
-            activity.Location,
-            activity.City,
+            SanitizeText(activity.Title),
+            SanitizeText(activity.Description),
+            SanitizeText(activity.Organizer),
+            SanitizeText(activity.Location),
+            SanitizeText(activity.City),
             activity.AgeFrom,
             activity.AgeTo,
-            activity.Sport,
-            activity.Category,
+            SanitizeText(activity.Sport),
+            SanitizeText(activity.Category),
             activity.ListingType.ToString(),
             activity.Date,
             activity.Price,
-            activity.WebsiteUrl,
-            activity.SignupUrl,
-            activity.ImageUrl,
-            activity.Source,
+            SanitizeText(activity.WebsiteUrl),
+            SanitizeText(activity.SignupUrl),
+            SanitizeText(activity.ImageUrl),
+            SanitizeText(activity.Source),
             activity.RegistrationStatus.ToString(),
             activity.RegistrationOpenAt,
             activity.RegistrationCloseAt,
             activity.CreatedAt);
+
+    private static string SanitizeText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value;
+
+        for (var index = 0; index < 2; index++)
+        {
+            var decoded = WebUtility.HtmlDecode(normalized);
+
+            if (string.Equals(decoded, normalized, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            normalized = decoded;
+        }
+
+        normalized = normalized
+            .Replace("\u00A0", " ", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal);
+
+        return Regex.Replace(normalized, "\\s+", " ", RegexOptions.CultureInvariant).Trim();
+    }
 }

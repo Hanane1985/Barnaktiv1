@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
+using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using Barnaktiv.Application.DTOs.Ingestion;
 using Barnaktiv.Application.Interfaces;
 using Barnaktiv.Application.Models.Ingestion;
@@ -235,14 +237,43 @@ public sealed class ActivityIngestionService(
     {
         return string.IsNullOrWhiteSpace(incoming)
             ? current
-            : incoming.Trim();
+            : SanitizeText(incoming);
     }
 
     private static string FillIfMissing(string current, string incoming)
     {
         return string.IsNullOrWhiteSpace(current)
-            ? incoming.Trim()
+            ? SanitizeText(incoming)
             : current;
+    }
+
+    private static string SanitizeText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value;
+
+        for (var index = 0; index < 2; index++)
+        {
+            var decoded = WebUtility.HtmlDecode(normalized);
+
+            if (string.Equals(decoded, normalized, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            normalized = decoded;
+        }
+
+        normalized = normalized
+            .Replace("\u00A0", " ", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal);
+
+        return Regex.Replace(normalized, "\\s+", " ", RegexOptions.CultureInvariant).Trim();
     }
 
     private static RegistrationStatus PreferIncoming(
