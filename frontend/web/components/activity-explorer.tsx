@@ -1,25 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useDeferredValue, useEffect, useState, useTransition } from "react";
 
+import {
+  buildActivityRouteSearchParams,
+  defaultActivityFilters,
+  type ActivityFilters,
+  type AgeGroup,
+  type PriceFilter,
+  type SortOption,
+} from "@/lib/activity-filters";
 import type { Activity } from "@/lib/activities";
 
 type ActivityExplorerProps = {
   activities: Activity[];
+  initialFilters: ActivityFilters;
   errorMessage?: string;
 };
-
-type AgeGroup = "all" | "0-3" | "4-6" | "7-9" | "10-12" | "13+";
-type PriceFilter = "all" | "free" | "paid";
-type SortOption =
-  | "date-asc"
-  | "date-desc"
-  | "created-desc"
-  | "registration"
-  | "price-asc"
-  | "price-desc"
-  | "title-asc";
 type RegistrationStatus = "Unknown" | "Upcoming" | "Open" | "Closed" | "Full";
 type FallbackImage = {
   photoSrc: string;
@@ -56,14 +55,6 @@ const sortOptions: { value: SortOption; label: string }[] = [
   { value: "price-desc", label: "Dyrast först" },
   { value: "title-asc", label: "A-Ö" },
 ];
-
-const registrationPriority: Record<RegistrationStatus, number> = {
-  Open: 0,
-  Upcoming: 1,
-  Unknown: 2,
-  Full: 3,
-  Closed: 4,
-};
 
 const detailedDateFormatter = new Intl.DateTimeFormat("sv-SE", {
   weekday: "long",
@@ -111,23 +102,6 @@ function formatAgeRange(activity: Activity) {
   return `${activity.ageFrom}-${activity.ageTo} år`;
 }
 
-function matchesAgeGroup(activity: Activity, selectedAgeGroup: AgeGroup) {
-  if (selectedAgeGroup === "all") {
-    return true;
-  }
-
-  const ageGroup = ageGroups.find((item) => item.value === selectedAgeGroup);
-
-  if (!ageGroup) {
-    return true;
-  }
-
-  const minimumAge = ageGroup.min ?? 0;
-  const maximumAge = ageGroup.max ?? 99;
-
-  return activity.ageFrom <= maximumAge && activity.ageTo >= minimumAge;
-}
-
 function getResultSummary(count: number) {
   if (count === 0) {
     return "Inga aktiviteter matchar";
@@ -139,109 +113,6 @@ function getResultSummary(count: number) {
 
   return `${count} aktiviteter`;
 }
-
-function getTimestamp(value: string | null | undefined) {
-  if (!value) {
-    return Number.NaN;
-  }
-
-  return new Date(value).getTime();
-}
-
-function compareNumbers(left: number, right: number) {
-  const leftIsValid = Number.isFinite(left);
-  const rightIsValid = Number.isFinite(right);
-
-  if (!leftIsValid && !rightIsValid) {
-    return 0;
-  }
-
-  if (!leftIsValid) {
-    return 1;
-  }
-
-  if (!rightIsValid) {
-    return -1;
-  }
-
-  return left - right;
-}
-
-function compareNumbersDescending(left: number, right: number) {
-  const leftIsValid = Number.isFinite(left);
-  const rightIsValid = Number.isFinite(right);
-
-  if (!leftIsValid && !rightIsValid) {
-    return 0;
-  }
-
-  if (!leftIsValid) {
-    return 1;
-  }
-
-  if (!rightIsValid) {
-    return -1;
-  }
-
-  return right - left;
-}
-
-function compareTitles(left: Activity, right: Activity) {
-  return left.title.localeCompare(right.title, "sv-SE");
-}
-
-function compareActivities(
-  left: Activity,
-  right: Activity,
-  selectedSort: SortOption,
-) {
-  switch (selectedSort) {
-    case "date-desc":
-      return (
-        compareNumbersDescending(getTimestamp(left.date), getTimestamp(right.date)) ||
-        compareTitles(left, right)
-      );
-    case "created-desc":
-      return (
-        compareNumbersDescending(
-          getTimestamp(left.createdAt),
-          getTimestamp(right.createdAt),
-        ) ||
-        compareNumbers(getTimestamp(left.date), getTimestamp(right.date)) ||
-        compareTitles(left, right)
-      );
-    case "registration": {
-      const leftPriority =
-        registrationPriority[left.registrationStatus as RegistrationStatus] ??
-        registrationPriority.Unknown;
-      const rightPriority =
-        registrationPriority[right.registrationStatus as RegistrationStatus] ??
-        registrationPriority.Unknown;
-
-      return (
-        compareNumbers(leftPriority, rightPriority) ||
-        compareNumbers(getTimestamp(left.date), getTimestamp(right.date)) ||
-        compareTitles(left, right)
-      );
-    }
-    case "price-asc":
-      return compareNumbers(left.price, right.price) || compareTitles(left, right);
-    case "price-desc":
-      return (
-        compareNumbersDescending(left.price, right.price) ||
-        compareTitles(left, right)
-      );
-    case "title-asc":
-      return compareTitles(left, right);
-    case "date-asc":
-    default:
-      return (
-        compareNumbers(getTimestamp(left.date), getTimestamp(right.date)) ||
-        compareTitles(left, right)
-      );
-  }
-}
-
 function formatRegistrationSummary(activity: Activity) {
   const registrationStatus = activity.registrationStatus as RegistrationStatus;
   const registrationOpenAt = activity.registrationOpenAt
@@ -341,6 +212,20 @@ function getCategoryLabels(categoryValue: string) {
         .filter(Boolean),
     ),
   );
+}
+
+function getSortedOptions(values: string[], selectedValue: string) {
+  const options = Array.from(new Set(values.filter(Boolean)));
+
+  if (
+    selectedValue !== defaultActivityFilters.city &&
+    selectedValue.length > 0 &&
+    !options.includes(selectedValue)
+  ) {
+    options.push(selectedValue);
+  }
+
+  return options.sort((left, right) => left.localeCompare(right, "sv-SE"));
 }
 
 function normalizeMatchingText(value: string) {
@@ -759,74 +644,89 @@ function ActivityCard({ activity }: { activity: Activity }) {
 
 export function ActivityExplorer({
   activities,
+  initialFilters,
   errorMessage,
 }: ActivityExplorerProps) {
-  const [search, setSearch] = useState("");
-  const [selectedCity, setSelectedCity] = useState("all");
-  const [selectedOrganizer, setSelectedOrganizer] = useState("all");
-  const [selectedSport, setSelectedSport] = useState("all");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup>("all");
-  const [selectedPrice, setSelectedPrice] = useState<PriceFilter>("all");
-  const [selectedSort, setSelectedSort] = useState<SortOption>("date-asc");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+  const [search, setSearch] = useState(initialFilters.search);
+  const [selectedCity, setSelectedCity] = useState(initialFilters.city);
+  const [selectedOrganizer, setSelectedOrganizer] = useState(initialFilters.organizer);
+  const [selectedSport, setSelectedSport] = useState(initialFilters.sport);
+  const [selectedCategory, setSelectedCategory] = useState(initialFilters.category);
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup>(
+    initialFilters.ageGroup,
+  );
+  const [selectedPrice, setSelectedPrice] = useState<PriceFilter>(initialFilters.price);
+  const [selectedSort, setSelectedSort] = useState<SortOption>(initialFilters.sort);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
-  const searchTerm = deferredSearch.trim().toLowerCase();
 
-  const cities = Array.from(new Set(activities.map((activity) => activity.city).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right),
+  useEffect(() => {
+    setSearch(initialFilters.search);
+    setSelectedCity(initialFilters.city);
+    setSelectedOrganizer(initialFilters.organizer);
+    setSelectedSport(initialFilters.sport);
+    setSelectedCategory(initialFilters.category);
+    setSelectedAgeGroup(initialFilters.ageGroup);
+    setSelectedPrice(initialFilters.price);
+    setSelectedSort(initialFilters.sort);
+  }, [initialFilters]);
+
+  useEffect(() => {
+    const nextQueryString = buildActivityRouteSearchParams({
+      search: deferredSearch,
+      city: selectedCity,
+      organizer: selectedOrganizer,
+      sport: selectedSport,
+      category: selectedCategory,
+      ageGroup: selectedAgeGroup,
+      price: selectedPrice,
+      sort: selectedSort,
+    }).toString();
+    const currentQueryString = searchParams.toString();
+
+    if (nextQueryString === currentQueryString) {
+      return;
+    }
+
+    startTransition(() => {
+      router.replace(
+        nextQueryString ? `${pathname}?${nextQueryString}` : pathname,
+        { scroll: false },
+      );
+    });
+  }, [
+    deferredSearch,
+    pathname,
+    router,
+    searchParams,
+    selectedAgeGroup,
+    selectedCategory,
+    selectedCity,
+    selectedOrganizer,
+    selectedPrice,
+    selectedSort,
+    selectedSport,
+  ]);
+
+  const cities = getSortedOptions(
+    activities.map((activity) => activity.city),
+    selectedCity,
   );
-  const organizers = Array.from(
-    new Set(activities.map((activity) => activity.organizer).filter(Boolean)),
-  ).sort((left, right) => left.localeCompare(right));
-  const sports = Array.from(new Set(activities.map((activity) => activity.sport).filter(Boolean))).sort(
-    (left, right) => left.localeCompare(right),
+  const organizers = getSortedOptions(
+    activities.map((activity) => activity.organizer),
+    selectedOrganizer,
   );
-  const categories = Array.from(
-    new Set(
-      activities.flatMap((activity) => getCategoryLabels(activity.category)),
-    ),
-  ).sort((left, right) => left.localeCompare(right));
-
-  const filteredActivities = activities.filter((activity) => {
-    const matchesSearch =
-      searchTerm.length === 0 ||
-      [
-        activity.title,
-        activity.description,
-        activity.organizer,
-        activity.location,
-        activity.city,
-        activity.sport,
-        activity.category,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(searchTerm);
-
-    const matchesCity = selectedCity === "all" || activity.city === selectedCity;
-    const matchesOrganizer =
-      selectedOrganizer === "all" || activity.organizer === selectedOrganizer;
-    const matchesSport = selectedSport === "all" || activity.sport === selectedSport;
-    const matchesCategory =
-      selectedCategory === "all" ||
-      getCategoryLabels(activity.category).includes(selectedCategory);
-    const matchesPrice =
-      selectedPrice === "all" ||
-      (selectedPrice === "free" ? activity.price <= 0 : activity.price > 0);
-
-    return (
-      matchesSearch &&
-      matchesCity &&
-      matchesOrganizer &&
-      matchesSport &&
-      matchesCategory &&
-      matchesPrice &&
-      matchesAgeGroup(activity, selectedAgeGroup)
-    );
-  });
-  const sortedActivities = [...filteredActivities].sort((left, right) =>
-    compareActivities(left, right, selectedSort),
+  const sports = getSortedOptions(
+    activities.map((activity) => activity.sport),
+    selectedSport,
+  );
+  const categories = getSortedOptions(
+    activities.flatMap((activity) => getCategoryLabels(activity.category)),
+    selectedCategory,
   );
   const selectedSortLabel =
     sortOptions.find((option) => option.value === selectedSort)?.label ??
@@ -842,14 +742,14 @@ export function ActivityExplorer({
   const featuredCategories = categories.slice(0, 5);
 
   const clearFilters = () => {
-    setSearch("");
-    setSelectedCity("all");
-    setSelectedOrganizer("all");
-    setSelectedSport("all");
-    setSelectedCategory("all");
-    setSelectedAgeGroup("all");
-    setSelectedPrice("all");
-    setSelectedSort("date-asc");
+    setSearch(defaultActivityFilters.search);
+    setSelectedCity(defaultActivityFilters.city);
+    setSelectedOrganizer(defaultActivityFilters.organizer);
+    setSelectedSport(defaultActivityFilters.sport);
+    setSelectedCategory(defaultActivityFilters.category);
+    setSelectedAgeGroup(defaultActivityFilters.ageGroup);
+    setSelectedPrice(defaultActivityFilters.price);
+    setSelectedSort(defaultActivityFilters.sort);
     setIsSortMenuOpen(false);
   };
 
@@ -1197,7 +1097,9 @@ export function ActivityExplorer({
               Aktiviteter att upptäcka
             </h2>
             <p className="mt-2 text-sm text-[color:var(--muted)]">
-              {getResultSummary(sortedActivities.length)} efter dina val.
+              {isPending
+                ? "Uppdaterar resultat..."
+                : `${getResultSummary(activities.length)} efter dina val.`}
             </p>
           </div>
           <div className="text-sm text-[color:var(--muted)]">
@@ -1211,9 +1113,9 @@ export function ActivityExplorer({
           </div>
         </div>
 
-        {sortedActivities.length > 0 ? (
+        {activities.length > 0 ? (
           <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-            {sortedActivities.map((activity) => (
+            {activities.map((activity) => (
               <ActivityCard key={activity.id} activity={activity} />
             ))}
           </div>

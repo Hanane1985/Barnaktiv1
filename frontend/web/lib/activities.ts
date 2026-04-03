@@ -1,3 +1,9 @@
+import {
+  buildActivityApiSearchParams,
+  defaultActivityFilters,
+  type ActivityFilters,
+} from "@/lib/activity-filters";
+
 export type Activity = {
   id: string;
   title: string;
@@ -38,11 +44,17 @@ function getApiBaseUrl() {
   return configuredBaseUrl?.trim().replace(/\/$/, "") || DEFAULT_API_BASE_URL;
 }
 
-export async function getActivities(): Promise<ActivitiesResult> {
+export async function getActivities(
+  filters: ActivityFilters = defaultActivityFilters,
+): Promise<ActivitiesResult> {
   const apiBaseUrl = getApiBaseUrl();
+  const queryString = buildActivityApiSearchParams(filters).toString();
+  const requestUrl = queryString
+    ? `${apiBaseUrl}/api/activities?${queryString}`
+    : `${apiBaseUrl}/api/activities`;
 
   try {
-    const response = await fetch(`${apiBaseUrl}/api/activities`, {
+    const response = await fetch(requestUrl, {
       cache: "no-store",
       headers: {
         Accept: "application/json",
@@ -68,17 +80,6 @@ export async function getActivities(): Promise<ActivitiesResult> {
     }
 
     const activities = payload as Activity[];
-
-    activities.sort((left, right) => {
-      const dateDifference =
-        new Date(left.date).getTime() - new Date(right.date).getTime();
-
-      if (dateDifference !== 0) {
-        return dateDifference;
-      }
-
-      return left.title.localeCompare(right.title);
-    });
 
     return {
       activities,
