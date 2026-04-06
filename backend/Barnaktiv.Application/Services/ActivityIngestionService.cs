@@ -13,7 +13,8 @@ namespace Barnaktiv.Application.Services;
 public sealed class ActivityIngestionService(
     IIngestionSourceProvider sourceProvider,
     IEnumerable<IActivityScraper> scrapers,
-    IActivityIngestionRepository repository) : IActivityIngestionService
+    IActivityIngestionRepository repository,
+    IActivityIngestionExecutionGate executionGate) : IActivityIngestionService
 {
     private const int SaveBatchSize = 100;
 
@@ -35,6 +36,8 @@ public sealed class ActivityIngestionService(
 
     public async Task<IngestionRunDto> RunAsync(CancellationToken cancellationToken)
     {
+        using var runHandle = await executionGate.AcquireAsync(cancellationToken);
+
         var startedAt = DateTime.UtcNow;
         var configuredSources = sourceProvider.GetSources();
         var enabledSources = configuredSources.Where(source => source.IsEnabled).ToList();

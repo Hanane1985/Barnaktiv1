@@ -8,6 +8,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        services.AddSingleton<IActivityIngestionExecutionGate, ActivityIngestionExecutionGate>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IActivityIngestionService, ActivityIngestionService>();
         return services;
