@@ -2,12 +2,15 @@ using Barnaktiv.Application.Interfaces;
 using Barnaktiv.Domain.Entities;
 using Barnaktiv.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace Barnaktiv.Infrastructure.Repositories;
 
 public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
     : IActivityIngestionRepository
 {
+    private const int ExternalIdLookupBatchSize = 200;
+
     public async Task<IReadOnlyDictionary<string, Activity>> GetBySourceKeyAndExternalIdsAsync(
         string sourceKey,
         IReadOnlyCollection<string> externalIds,
@@ -20,14 +23,19 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
             return new Dictionary<string, Activity>(StringComparer.OrdinalIgnoreCase);
         }
 
-        // Loading one source at a time avoids translating large external-id sets into
-        // expensive SQL `IN`/`OPENJSON` predicates, which was timing out during ingestion.
-        var sourceActivities = await dbContext.Activities
-            .Where(activity => activity.SourceKey == sourceKey)
-            .ToListAsync(cancellationToken);
+        var matchingActivities = new List<Activity>();
 
-        return sourceActivities
-            .Where(activity => externalIdSet.Contains(activity.ExternalId))
+        foreach (var externalIdBatch in externalIdSet.Chunk(ExternalIdLookupBatchSize))
+        {
+            var batchPredicate = BuildSourceAndExternalIdsPredicate(sourceKey, externalIdBatch);
+            var batchActivities = await dbContext.Activities
+                .Where(batchPredicate)
+                .ToListAsync(cancellationToken);
+
+            matchingActivities.AddRange(batchActivities);
+        }
+
+        return matchingActivities
             .ToDictionary(
                 activity => activity.ExternalId,
                 StringComparer.OrdinalIgnoreCase);
@@ -48,22 +56,20 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
     public async Task RemoveActivitiesNotInExternalIdsAsync(
         string sourceKey,
         IReadOnlyCollection<string> externalIds,
+        DateTime runStartedAtUtc,
         CancellationToken cancellationToken)
     {
         var externalIdSet = CreateExternalIdSet(externalIds);
-        var sourceActivities = await dbContext.Activities
-            .Where(activity => activity.SourceKey == sourceKey)
-            .ToListAsync(cancellationToken);
-        var activitiesToRemove = sourceActivities
-            .Where(activity => !externalIdSet.Contains(activity.ExternalId))
-            .ToList();
 
-        if (activitiesToRemove.Count == 0)
+        if (externalIdSet.Count == 0)
         {
             return;
         }
 
-        dbContext.Activities.RemoveRange(activitiesToRemove);
+        await dbContext.Activities
+            .Where(activity => activity.SourceKey == sourceKey)
+            .Where(activity => activity.LastSeenAt == null || activity.LastSeenAt < runStartedAtUtc)
+            .ExecuteDeleteAsync(cancellationToken);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken)
@@ -77,5 +83,38 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
             .Where(externalId => !string.IsNullOrWhiteSpace(externalId))
             .Select(externalId => externalId.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static Expression<Func<Activity, bool>> BuildSourceAndExternalIdsPredicate(
+        string sourceKey,
+        string[] externalIds)
+    {
+        var activityParameter = Expression.Parameter(typeof(Activity), "activity");
+        var sourceKeyProperty = Expression.Property(activityParameter, nameof(Activity.SourceKey));
+        var externalIdProperty = Expression.Property(activityParameter, nameof(Activity.ExternalId));
+        Expression? externalIdPredicate = null;
+
+        foreach (var externalId in externalIds)
+        {
+            var equalsExternalId = Expression.Equal(
+                externalIdProperty,
+                Expression.Constant(externalId));
+
+            externalIdPredicate = externalIdPredicate is null
+                ? equalsExternalId
+                : Expression.OrElse(externalIdPredicate, equalsExternalId);
+        }
+
+        if (externalIdPredicate is null)
+        {
+            return _ => false;
+        }
+
+        var sourceKeyPredicate = Expression.Equal(
+            sourceKeyProperty,
+            Expression.Constant(sourceKey));
+        var body = Expression.AndAlso(sourceKeyPredicate, externalIdPredicate);
+
+        return Expression.Lambda<Func<Activity, bool>>(body, activityParameter);
     }
 }

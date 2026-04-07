@@ -142,15 +142,26 @@ public sealed class ActivityIngestionService(
                 }
             }
 
-            if (seenExternalIds.Count > 0 && scrapeResult.CanRemoveMissingActivities)
+            var canRemoveMissingActivities =
+                seenExternalIds.Count > 0 &&
+                scrapeResult.CanRemoveMissingActivities;
+
+            if (canRemoveMissingActivities && pendingChanges > 0)
+            {
+                await repository.SaveChangesAsync(cancellationToken);
+                pendingChanges = 0;
+            }
+
+            if (canRemoveMissingActivities)
             {
                 await repository.RemoveActivitiesNotInExternalIdsAsync(
                     source.SourceKey,
                     seenExternalIds,
+                    startedAt,
                     cancellationToken);
             }
 
-            if (pendingChanges > 0 || (seenExternalIds.Count > 0 && scrapeResult.CanRemoveMissingActivities))
+            if (pendingChanges > 0)
             {
                 await repository.SaveChangesAsync(cancellationToken);
             }
