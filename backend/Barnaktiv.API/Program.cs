@@ -1,13 +1,38 @@
+using Barnaktiv.API.Auth;
 using Barnaktiv.Application;
 using Barnaktiv.Infrastructure;
 using Barnaktiv.API.Options;
 using Barnaktiv.API.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services
+    .AddOptions<AdminApiKeyOptions>()
+    .BindConfiguration(AdminApiKeyOptions.SectionName)
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.HeaderName),
+        "Admin API key header name must be configured.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.ApiKey),
+        "Admin API key must be configured.")
+    .ValidateOnStart();
+builder.Services
+    .AddAuthentication(AdminApiKeyDefaults.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, AdminApiKeyAuthenticationHandler>(
+        AdminApiKeyDefaults.SchemeName,
+        _ => { });
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AdminApiKeyDefaults.PolicyName, policy =>
+    {
+        policy.AddAuthenticationSchemes(AdminApiKeyDefaults.SchemeName);
+        policy.RequireAuthenticatedUser();
+    });
+});
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -43,6 +68,9 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/", () => Results.Redirect("/swagger"))
         .ExcludeFromDescription();
 }
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 

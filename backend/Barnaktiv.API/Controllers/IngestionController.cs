@@ -1,11 +1,14 @@
+using Barnaktiv.API.Auth;
 using Barnaktiv.Application.DTOs.Ingestion;
 using Barnaktiv.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Barnaktiv.API.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Authorize(Policy = AdminApiKeyDefaults.PolicyName)]
+[Route("api/admin/ingestion")]
 public sealed class IngestionController(IActivityIngestionService ingestionService) : ControllerBase
 {
     /// <summary>Returns configured ingestion sources.</summary>
