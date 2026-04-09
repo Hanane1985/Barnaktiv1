@@ -1,7 +1,7 @@
-using Barnaktiv.Application.DTOs.Activities;
 using Barnaktiv.Application.Interfaces;
+using Barnaktiv.Application.Activities.Queries;
+using Barnaktiv.Domain;
 using Barnaktiv.Domain.Entities;
-using Barnaktiv.Domain.Enums;
 using Barnaktiv.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,7 +10,7 @@ namespace Barnaktiv.Infrastructure.Repositories;
 public sealed class ActivityRepository(ApplicationDbContext dbContext) : IActivityRepository
 {
     public async Task<IReadOnlyList<Activity>> GetAllAsync(
-        ActivityQueryDto query,
+        ActivityPersistenceQuery query,
         CancellationToken cancellationToken)
     {
         var activities = dbContext.Activities
@@ -18,8 +18,7 @@ public sealed class ActivityRepository(ApplicationDbContext dbContext) : IActivi
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var search = query.Search.Trim();
-            var searchPattern = $"%{search}%";
+            var searchPattern = $"%{query.Search}%";
 
             activities = activities.Where(activity =>
                 EF.Functions.Like(activity.Title, searchPattern) ||
@@ -31,21 +30,18 @@ public sealed class ActivityRepository(ApplicationDbContext dbContext) : IActivi
                 EF.Functions.Like(activity.Category, searchPattern));
         }
 
-        if (HasFilterValue(query.City))
+        if (query.City is { } city)
         {
-            var city = query.City!.Trim();
             activities = activities.Where(activity => activity.City == city);
         }
 
-        if (HasFilterValue(query.Organizer))
+        if (query.Organizer is { } organizer)
         {
-            var organizer = query.Organizer!.Trim();
             activities = activities.Where(activity => activity.Organizer == organizer);
         }
 
-        if (HasFilterValue(query.Sport))
+        if (query.Sport is { } sport)
         {
-            var sport = query.Sport!.Trim();
             activities = activities.Where(activity => activity.Sport == sport);
         }
 
@@ -61,102 +57,44 @@ public sealed class ActivityRepository(ApplicationDbContext dbContext) : IActivi
             activities = activities.Where(activity => activity.AgeFrom <= maxAge);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Price))
+        activities = query.PriceFilter switch
         {
-            switch (query.Price.Trim().ToLowerInvariant())
-            {
-                case "free":
-                    activities = activities.Where(activity => activity.Price <= 0m);
-                    break;
-                case "paid":
-                    activities = activities.Where(activity => activity.Price > 0m);
-                    break;
-            }
-        }
+            ActivityPriceFilterOption.FreeOnly => activities.Where(activity => activity.Price <= 0m),
+            ActivityPriceFilterOption.PaidOnly => activities.Where(activity => activity.Price > 0m),
+            _ => activities,
+        };
 
         activities = ApplySorting(activities, query.Sort);
 
-        var results = await activities.ToListAsync(cancellationToken);
-
-        if (HasFilterValue(query.Category))
-        {
-            var category = query.Category!.Trim();
-            results = results
-                .Where(activity => MatchesCategory(activity.Category, category))
-                .ToList();
-        }
-
-        return results;
+        return await activities.ToListAsync(cancellationToken);
     }
 
     private static IQueryable<Activity> ApplySorting(
         IQueryable<Activity> activities,
-        string? sort)
-    {
-        return sort?.Trim().ToLowerInvariant() switch
+        ActivitySortOption sort) =>
+        sort switch
         {
-            "date-desc" => activities
+            ActivitySortOption.DateDescending => activities
                 .OrderByDescending(activity => activity.Date)
                 .ThenBy(activity => activity.Title),
-            "created-desc" => activities
+            ActivitySortOption.CreatedDescending => activities
                 .OrderByDescending(activity => activity.CreatedAt)
                 .ThenBy(activity => activity.Date)
                 .ThenBy(activity => activity.Title),
-            "registration" => activities
-                .OrderBy(activity => activity.RegistrationStatus == RegistrationStatus.Open ? 0 :
-                    activity.RegistrationStatus == RegistrationStatus.Upcoming ? 1 :
-                    activity.RegistrationStatus == RegistrationStatus.Unknown ? 2 :
-                    activity.RegistrationStatus == RegistrationStatus.Full ? 3 : 4)
+            ActivitySortOption.Registration => activities
+                .OrderBy(activity => ActivityRegistrationSortPriority.Rank(activity.RegistrationStatus))
                 .ThenBy(activity => activity.Date)
                 .ThenBy(activity => activity.Title),
-            "price-asc" => activities
+            ActivitySortOption.PriceAscending => activities
                 .OrderBy(activity => activity.Price)
                 .ThenBy(activity => activity.Title),
-            "price-desc" => activities
+            ActivitySortOption.PriceDescending => activities
                 .OrderByDescending(activity => activity.Price)
                 .ThenBy(activity => activity.Title),
-            "title-asc" => activities
+            ActivitySortOption.TitleAscending => activities
                 .OrderBy(activity => activity.Title),
             _ => activities
                 .OrderBy(activity => activity.Date)
                 .ThenBy(activity => activity.Title),
         };
-    }
-
-    private static bool MatchesCategory(string categoryValue, string selectedCategory)
-    {
-        if (string.IsNullOrWhiteSpace(categoryValue))
-        {
-            return false;
-        }
-
-        var normalizedSelectedCategory = NormalizeCategoryToken(selectedCategory);
-
-        return categoryValue
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(NormalizeCategoryToken)
-            .Any(category => category == normalizedSelectedCategory);
-    }
-
-    private static string NormalizeCategoryToken(string category)
-    {
-        var normalized = category
-            .Trim()
-            .ToLowerInvariant()
-            .Replace(" / ", "/")
-            .Replace("/ ", "/")
-            .Replace(" /", "/");
-
-        return normalized switch
-        {
-            "bad" => "bad/simning",
-            _ => normalized,
-        };
-    }
-
-    private static bool HasFilterValue(string? value)
-    {
-        return !string.IsNullOrWhiteSpace(value) &&
-               !string.Equals(value.Trim(), "all", StringComparison.OrdinalIgnoreCase);
-    }
 }

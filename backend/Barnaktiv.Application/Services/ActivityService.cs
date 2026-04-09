@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.RegularExpressions;
+using Barnaktiv.Application.Activities.Queries;
 using Barnaktiv.Application.DTOs.Activities;
 using Barnaktiv.Application.Interfaces;
+using Barnaktiv.Domain;
 using Barnaktiv.Domain.Entities;
 
 namespace Barnaktiv.Application.Services;
@@ -12,7 +14,17 @@ public sealed class ActivityService(IActivityRepository repository) : IActivityS
         ActivityQueryDto query,
         CancellationToken cancellationToken)
     {
-        var activities = await repository.GetAllAsync(query, cancellationToken);
+        var persistenceQuery = ActivityQueryMapper.ToPersistenceQuery(query);
+        var activities = await repository.GetAllAsync(persistenceQuery, cancellationToken);
+
+        var categoryFilter = ActivityQueryMapper.CategoryFilterOrNull(query);
+        if (categoryFilter is not null)
+        {
+            activities = activities
+                .Where(activity => ActivityCategoryMatching.MatchesSelection(activity.Category, categoryFilter))
+                .ToList();
+        }
+
         return activities.Select(Map).ToList();
     }
 
