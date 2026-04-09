@@ -16,6 +16,7 @@ import {
   getPrimaryLink,
   getRegistrationBadgeClassName,
   parseRegistrationStatus,
+  registrationStatusLabelSv,
 } from "./activity-domain";
 import { useActivityImageSources } from "./hooks/use-activity-image-sources";
 
@@ -42,8 +43,8 @@ export function ActivityCard({ activity }: ActivityCardProps) {
   const timeLabel = formatActivityCardTimeLabel(activityDate);
 
   return (
-    <article className="group flex h-full flex-col overflow-hidden rounded-[1.9rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] shadow-black/8 transition duration-300 hover:-translate-y-1">
-      <div className="relative aspect-[16/9] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#f4b18f,#f8e9d9_55%,#f6f0e6)]">
+    <article className="group flex h-full flex-col overflow-hidden rounded-3xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] shadow-[var(--card-shadow)] ring-1 ring-black/[0.03] transition duration-300 hover:-translate-y-0.5 hover:shadow-[var(--card-shadow-hover)]">
+      <div className="relative aspect-[16/9] overflow-hidden border-b border-[color:var(--border)] bg-[linear-gradient(135deg,#efd4c4,#f8ebe3_50%,#f4f0eb)]">
         {showImage ? (
           <>
             {/* Activity images come from multiple hosts, so use a plain img instead of broad remote image configuration. */}
@@ -94,11 +95,11 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             </span>
             {registrationSummary ? (
               <span
-                className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] shadow-sm ${getRegistrationBadgeClassName(
+                className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] shadow-sm ${getRegistrationBadgeClassName(
                   registrationStatus,
                 )}`}
               >
-                {registrationStatus}
+                {registrationStatusLabelSv(registrationStatus)}
               </span>
             ) : null}
           </div>
@@ -108,7 +109,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
       <div className="flex flex-1 flex-col p-4 sm:p-5">
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <h2 className="text-[1.16rem] font-semibold leading-tight tracking-tight text-[color:var(--foreground)]">
+            <h2 className="font-display text-[1.2rem] font-semibold leading-snug tracking-tight text-[color:var(--foreground)]">
               {activity.title}
             </h2>
             <p className="text-sm font-medium text-[color:var(--muted)]">
@@ -119,7 +120,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             </p>
           </div>
 
-          <div className="rounded-[1.35rem] bg-[rgba(255,255,255,0.82)] px-4 py-3 text-sm text-[color:var(--foreground)]">
+          <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3 text-sm text-[color:var(--foreground)]">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
                 När
@@ -162,7 +163,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
                 href={primaryLink.href}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full bg-[color:var(--accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--accent-strong)]"
+                className="btn-primary"
               >
                 {primaryLink.label}
               </Link>

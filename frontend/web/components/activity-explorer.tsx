@@ -1,8 +1,15 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useState, useTransition } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
+import { SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { ActivityCard } from "@/features/activities/activity-card";
 import { ageGroups, priceFilters, sortOptions } from "@/features/activities/constants";
 import {
@@ -27,6 +34,62 @@ type ActivityExplorerProps = {
   errorMessage?: string;
 };
 
+function IconActivities({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4.5 12.5 9 7l3 3 4.5-4.5L20 8.5" />
+      <path d="M4 19h16" />
+      <path d="M8 15h.01M12 15h4" />
+    </svg>
+  );
+}
+
+function IconMap({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 20.5 3 17.5V5.5l6 3 6-3 6 3v12l-6-3-6 3z" />
+      <path d="M9 5.5v15M15 3.5v15" />
+    </svg>
+  );
+}
+
+function IconUsers({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
 export function ActivityExplorer({
   activities,
   initialFilters,
@@ -48,6 +111,7 @@ export function ActivityExplorer({
   const [selectedSort, setSelectedSort] = useState<SortOption>(initialFilters.sort);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setSearch(initialFilters.search);
@@ -97,6 +161,32 @@ export function ActivityExplorer({
     selectedSport,
   ]);
 
+  useEffect(() => {
+    if (!isSortMenuOpen) {
+      return;
+    }
+
+    const onPointerDown = (event: MouseEvent) => {
+      const node = sortMenuRef.current;
+      if (node && !node.contains(event.target as Node)) {
+        setIsSortMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSortMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isSortMenuOpen]);
+
   const cities = getSortedOptions(
     activities.map((activity) => activity.city),
     selectedCity,
@@ -138,382 +228,422 @@ export function ActivityExplorer({
     setIsSortMenuOpen(false);
   };
 
+  const statIconMuted = "h-5 w-5 shrink-0 text-[color:var(--accent)]";
+  const statIconOnDark = "h-5 w-5 shrink-0 text-white/85";
+
   return (
-    <main className="relative mx-auto flex min-h-screen w-full max-w-[86rem] flex-col gap-8 overflow-hidden px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[30rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.35),transparent)]" />
+    <>
+      <SiteHeader />
+      <main className="relative mx-auto flex min-h-screen w-full max-w-[86rem] flex-col gap-10 overflow-hidden px-4 pb-8 pt-6 sm:px-6 lg:gap-12 lg:px-8 lg:pb-12 lg:pt-8">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[32rem] opacity-90"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(232, 240, 236, 0.85) 0%, transparent 55%), radial-gradient(ellipse 50% 40% at 100% 20%, rgba(243, 224, 212, 0.5) 0%, transparent 50%)",
+          }}
+        />
 
-      <section className="relative overflow-hidden rounded-[2.8rem] border border-white/70 bg-[#fff9f2] px-6 py-7 shadow-[0_30px_90px_-54px_rgba(15,34,24,0.42)] sm:px-8 sm:py-10">
-        <div className="relative grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-          <div className="space-y-7">
-            <span className="inline-flex rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[color:var(--accent-strong)] shadow-sm">
-              Barnaktiviteter samlade på ett ställe
-            </span>
-
-            <div className="space-y-5">
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-[color:var(--foreground)] sm:text-5xl xl:text-6xl">
-                Ge varje ledig dag något att längta till.
-              </h1>
-              <p className="max-w-2xl text-base leading-8 text-[color:var(--muted)] sm:text-lg">
-                Barnaktiv samlar prova-på-pass, lovaktiviteter, kurser och
-                föreningsträffar så att du snabbt hittar rätt aktivitet för ditt
-                barn. Filtrera på stad, ålder, pris och anmälan utan att hoppa
-                mellan olika sidor.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded-[1.75rem] bg-[color:var(--foreground)] px-5 py-4 text-[color:var(--background)] shadow-[0_24px_60px_-38px_rgba(15,34,24,0.7)]">
-                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-white/70">
-                  Aktiviteter
-                </div>
-                <div className="mt-3 text-4xl font-semibold">{activities.length}</div>
-              </div>
-              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white px-5 py-4">
-                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                  Städer
-                </div>
-                <div className="mt-3 text-4xl font-semibold text-[color:var(--foreground)]">
-                  {cities.length}
-                </div>
-              </div>
-              <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-white px-5 py-4">
-                <div className="text-[0.72rem] uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                  Arrangörer
-                </div>
-                <div className="mt-3 text-4xl font-semibold text-[color:var(--foreground)]">
-                  {organizers.length}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--muted)]">
-              <span className="font-medium text-[color:var(--foreground)]">
-                Populärt just nu:
+        <section className="relative overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-6 py-8 shadow-[var(--card-shadow)] sm:rounded-[2.25rem] sm:px-8 sm:py-10 lg:px-10 lg:py-12">
+          <div
+            className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[color:var(--accent-soft)]/40 blur-3xl"
+            aria-hidden
+          />
+          <div className="relative grid gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:items-center lg:gap-12">
+            <div className="space-y-8">
+              <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-2 text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--sage)]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--accent)]" />
+                Barnaktiviteter samlade på ett ställe
               </span>
-              {featuredCategories.length > 0 ? (
-                featuredCategories.map((category) => (
+
+              <div className="space-y-5">
+                <h1 className="font-display max-w-[20ch] text-[2.25rem] font-semibold leading-[1.08] tracking-tight text-[color:var(--foreground)] sm:text-5xl xl:text-[3.25rem]">
+                  Ge varje ledig dag något att längta till.
+                </h1>
+                <p className="max-w-xl text-base leading-relaxed text-[color:var(--muted)] sm:text-lg">
+                  Barnaktiv samlar prova-på-pass, lovaktiviteter, kurser och
+                  föreningsträffar så att du snabbt hittar rätt aktivitet för ditt
+                  barn. Filtrera på stad, ålder, pris och anmälan utan att hoppa
+                  mellan olika sidor.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="flex flex-col justify-between rounded-2xl bg-[color:var(--sage)] p-5 text-white shadow-md">
+                  <div className="flex items-center gap-2 text-white/80">
+                    <IconActivities className={statIconOnDark} />
+                    <span className="text-[0.7rem] font-semibold uppercase tracking-[0.16em]">
+                      Aktiviteter
+                    </span>
+                  </div>
+                  <p className="mt-4 font-display text-3xl font-semibold tabular-nums sm:text-4xl">
+                    {activities.length}
+                  </p>
+                </div>
+                <div className="card-surface flex flex-col justify-between rounded-2xl p-5">
+                  <div className="flex items-center gap-2 text-[color:var(--muted)]">
+                    <IconMap className={statIconMuted} />
+                    <span className="text-[0.7rem] font-semibold uppercase tracking-[0.16em]">
+                      Städer
+                    </span>
+                  </div>
+                  <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-[color:var(--foreground)] sm:text-4xl">
+                    {cities.length}
+                  </p>
+                </div>
+                <div className="card-surface flex flex-col justify-between rounded-2xl p-5">
+                  <div className="flex items-center gap-2 text-[color:var(--muted)]">
+                    <IconUsers className={statIconMuted} />
+                    <span className="text-[0.7rem] font-semibold uppercase tracking-[0.16em]">
+                      Arrangörer
+                    </span>
+                  </div>
+                  <p className="mt-4 font-display text-3xl font-semibold tabular-nums text-[color:var(--foreground)] sm:text-4xl">
+                    {organizers.length}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--muted)]">
+                <span className="font-medium text-[color:var(--foreground)]">
+                  Populärt just nu:
+                </span>
+                {featuredCategories.length > 0 ? (
+                  featuredCategories.map((category) => (
+                    <span
+                      key={category}
+                      className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1.5 text-[color:var(--foreground)] shadow-sm"
+                    >
+                      {category}
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-3 py-1.5 shadow-sm">
+                    Nya aktiviteter laddas in löpande
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href="#utforska"
+                  className="btn-primary inline-flex px-6 py-2.5"
+                >
+                  Börja utforska
+                </a>
+                <a href="#aktiviteter" className="btn-ghost inline-flex px-6 py-2.5">
+                  Se alla aktiviteter
+                </a>
+              </div>
+            </div>
+
+            <HeroCollage
+              activities={activities}
+              openActivitiesCount={openActivitiesCount}
+              freeActivitiesCount={freeActivitiesCount}
+            />
+          </div>
+        </section>
+
+        {errorMessage ? (
+          <section
+            className="rounded-2xl border border-amber-200/90 bg-amber-50 px-5 py-4 text-sm text-amber-950 shadow-sm"
+            role="alert"
+          >
+            <p className="font-semibold">Kunde inte hämta aktiviteter just nu.</p>
+            <p className="mt-2 leading-relaxed text-amber-950/90">
+              {errorMessage} Starta <code>Barnaktiv.API</code> eller sätt{" "}
+              <code>BARNAKTIV_API_BASE_URL</code> till rätt backendadress.
+            </p>
+          </section>
+        ) : null}
+
+        <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="card-surface rounded-[1.75rem] p-6 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--sage)]">
+              Enklare att välja rätt
+            </p>
+            <h2 className="font-display mt-4 text-2xl font-semibold tracking-tight text-[color:var(--foreground)] sm:text-3xl">
+              En startsida som inspirerar innan du filtrerar.
+            </h2>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-[color:var(--muted)]">
+              I stället för en torr lista får du en tydlig översikt med bilder,
+              siffror och snabbvägar till det som betyder mest: plats, ålder och om
+              det fortfarande går att anmäla sig.
+            </p>
+          </div>
+
+          <div className="rounded-[1.75rem] border border-[color:var(--border)] bg-[color:var(--surface)] p-6 shadow-[var(--card-shadow)] sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--sage)]">
+              Lokalt och levande
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {featuredCities.length > 0 ? (
+                featuredCities.map((city) => (
                   <span
-                    key={category}
-                    className="rounded-full border border-white/70 bg-white px-3 py-1.5 shadow-sm"
+                    key={city}
+                    className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm"
                   >
-                    {category}
+                    {city}
                   </span>
                 ))
               ) : (
-                <span className="rounded-full border border-white/70 bg-white px-3 py-1.5 shadow-sm">
-                  Nya aktiviteter laddas in löpande
+                <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-2 text-sm font-medium shadow-sm">
+                  Fler städer fylls på när datan laddas
                 </span>
               )}
             </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                  För familjer
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[color:var(--foreground)]">
+                  Hitta aktiviteter som passar barnets ålder och er vardag.
+                </p>
+              </div>
+              <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--muted)]">
+                  För arrangörer
+                </p>
+                <p className="mt-2 text-sm leading-relaxed text-[color:var(--foreground)]">
+                  Visa utbudet där föräldrar faktiskt letar.
+                </p>
+              </div>
+            </div>
           </div>
-
-          <HeroCollage
-            activities={activities}
-            openActivitiesCount={openActivitiesCount}
-            freeActivitiesCount={freeActivitiesCount}
-          />
-        </div>
-      </section>
-
-      {errorMessage ? (
-        <section className="rounded-[2rem] border border-amber-300 bg-amber-50/90 px-5 py-4 text-sm text-amber-950 shadow-sm">
-          <p className="font-semibold">
-            Aktiviteterna kunde inte hämtas från backend just nu.
-          </p>
-          <p className="mt-1">
-            {errorMessage} Starta <code>Barnaktiv.API</code> eller sätt{" "}
-            <code>BARNAKTIV_API_BASE_URL</code> till rätt backendadress.
-          </p>
         </section>
-      ) : null}
 
-      <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-white p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
-            Enklare att välja rätt
-          </p>
-          <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[color:var(--foreground)]">
-            En startsida som inspirerar innan du ens börjar filtrera.
-          </h2>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-[color:var(--muted)]">
-            I stället för en torr lista får du en varm, visuell översikt med
-            riktiga aktivitetsbilder, tydliga siffror och snabbvägar till det
-            som faktiskt betyder något för familjer: plats, ålder och om det
-            fortfarande finns chans att anmäla sig.
-          </p>
-        </div>
+        <section
+          id="utforska"
+          className="card-surface overflow-hidden rounded-[1.75rem] sm:rounded-[2rem]"
+        >
+          <div className="border-b border-[color:var(--border)] bg-[color:var(--surface)] px-5 py-5 sm:px-7 sm:py-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="font-display text-2xl font-semibold tracking-tight text-[color:var(--foreground)]">
+                  Filtrera smart
+                </h2>
+                <p className="mt-2 max-w-xl text-sm leading-relaxed text-[color:var(--muted)]">
+                  Snäva in efter plats, arrangör, sport, kategori, ålder och pris.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center" ref={sortMenuRef}>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={isSortMenuOpen}
+                    aria-haspopup="menu"
+                    aria-controls="sort-menu"
+                    id="sort-trigger"
+                    onClick={() => setIsSortMenuOpen((current) => !current)}
+                    className="btn-ghost w-full justify-between sm:w-auto"
+                  >
+                    Sortera: {selectedSortLabel}
+                    <span className="text-[color:var(--muted)]" aria-hidden>
+                      ▾
+                    </span>
+                  </button>
 
-        <div className="rounded-[2.25rem] border border-[color:var(--border)] bg-[#fffaf4] p-6 shadow-[var(--card-shadow)] shadow-black/5 sm:p-7">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)]">
-            Lokalt och levande
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {featuredCities.length > 0 ? (
-              featuredCities.map((city) => (
-                <span
-                  key={city}
-                  className="rounded-full bg-white px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm"
-                >
-                  {city}
-                </span>
-              ))
-            ) : (
-              <span className="rounded-full bg-white px-3 py-2 text-sm font-medium text-[color:var(--foreground)] shadow-sm">
-                Fler städer fylls på när datan laddas
-              </span>
-            )}
-          </div>
+                  {isSortMenuOpen ? (
+                    <div
+                      id="sort-menu"
+                      role="menu"
+                      aria-labelledby="sort-trigger"
+                      className="absolute right-0 z-30 mt-2 w-full min-w-[16rem] overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-1.5 shadow-[var(--card-shadow-hover)] sm:w-64"
+                    >
+                      <div className="space-y-0.5">
+                        {sortOptions.map((sortOption) => {
+                          const isSelected = sortOption.value === selectedSort;
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-[1.5rem] border border-white/70 bg-white p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                För familjer
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[color:var(--foreground)]">
-                Hitta snabbt aktiviteter som passar barnets ålder och er vardag.
-              </p>
-            </div>
-            <div className="rounded-[1.5rem] border border-white/70 bg-white p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                För arrangörer
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[color:var(--foreground)]">
-                Visa upp utbudet i en miljö som gör det enkelt att bli vald.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section
-        id="utforska"
-        className="rounded-[2.35rem] border border-[color:var(--border)] bg-white p-5 shadow-[var(--card-shadow)] shadow-black/5 sm:p-6"
-      >
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-[color:var(--foreground)]">
-              Filtrera smart
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
-              Snäva in listan efter plats, arrangör, sport, kategori, ålder och
-              pris så du slipper gissa dig fram.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="relative">
-              <button
-                type="button"
-                aria-expanded={isSortMenuOpen}
-                aria-haspopup="menu"
-                onClick={() => setIsSortMenuOpen((current) => !current)}
-                className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
-              >
-                Sortera: {selectedSortLabel}
-              </button>
-
-              {isSortMenuOpen ? (
-                <div className="absolute right-0 z-20 mt-2 w-64 overflow-hidden rounded-[1.5rem] border border-[color:var(--border)] bg-white p-2 shadow-[0_24px_60px_-36px_rgba(15,34,24,0.36)]">
-                  <div className="space-y-1">
-                    {sortOptions.map((sortOption) => {
-                      const isSelected = sortOption.value === selectedSort;
-
-                      return (
-                        <button
-                          key={sortOption.value}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSort(sortOption.value);
-                            setIsSortMenuOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between rounded-[1.15rem] px-3 py-2.5 text-left text-sm transition ${
-                            isSelected
-                              ? "bg-[color:var(--foreground)] font-semibold text-[color:var(--background)]"
-                              : "text-[color:var(--foreground)] hover:bg-[#fffaf5]"
-                          }`}
-                        >
-                          <span>{sortOption.label}</span>
-                          <span className="text-xs">
-                            {isSelected ? "Vald" : ""}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                          return (
+                            <button
+                              key={sortOption.value}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setSelectedSort(sortOption.value);
+                                setIsSortMenuOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                                isSelected
+                                  ? "bg-[color:var(--sage)] font-semibold text-white"
+                                  : "text-[color:var(--foreground)] hover:bg-[color:var(--surface)]"
+                              }`}
+                            >
+                              <span>{sortOption.label}</span>
+                              {isSelected ? (
+                                <span className="text-xs opacity-90">Vald</span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+
+                <button type="button" onClick={clearFilters} className="btn-ghost">
+                  Rensa filter
+                </button>
+              </div>
             </div>
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="rounded-full border border-[color:var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[color:var(--foreground)] transition hover:bg-[#fffaf5]"
-            >
-              Rensa filter
-            </button>
           </div>
-        </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1.7fr_repeat(6,minmax(0,1fr))]">
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Sök
-            </span>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Titel, plats, arrangör..."
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none ring-0 transition placeholder:text-[color:var(--muted)] focus:border-[color:var(--accent)]"
-            />
-          </label>
+          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-7 xl:grid-cols-[1.7fr_repeat(6,minmax(0,1fr))]">
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Sök</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Titel, plats, arrangör..."
+                className="input-barnaktiv"
+              />
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Stad
-            </span>
-            <select
-              value={selectedCity}
-              onChange={(event) => setSelectedCity(event.target.value)}
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
-            >
-              <option value="all">Alla städer</option>
-              {cities.map((city) => (
-                <option key={city} value={city}>
-                  {city}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Stad</span>
+              <select
+                value={selectedCity}
+                onChange={(event) => setSelectedCity(event.target.value)}
+                className="input-barnaktiv"
+              >
+                <option value="all">Alla städer</option>
+                {cities.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Arrangör
-            </span>
-            <select
-              value={selectedOrganizer}
-              onChange={(event) => setSelectedOrganizer(event.target.value)}
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
-            >
-              <option value="all">Alla arrangörer</option>
-              {organizers.map((organizer) => (
-                <option key={organizer} value={organizer}>
-                  {organizer}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Arrangör</span>
+              <select
+                value={selectedOrganizer}
+                onChange={(event) => setSelectedOrganizer(event.target.value)}
+                className="input-barnaktiv"
+              >
+                <option value="all">Alla arrangörer</option>
+                {organizers.map((organizer) => (
+                  <option key={organizer} value={organizer}>
+                    {organizer}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Sport
-            </span>
-            <select
-              value={selectedSport}
-              onChange={(event) => setSelectedSport(event.target.value)}
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
-            >
-              <option value="all">Alla sporter</option>
-              {sports.map((sport) => (
-                <option key={sport} value={sport}>
-                  {sport}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Sport</span>
+              <select
+                value={selectedSport}
+                onChange={(event) => setSelectedSport(event.target.value)}
+                className="input-barnaktiv"
+              >
+                <option value="all">Alla sporter</option>
+                {sports.map((sport) => (
+                  <option key={sport} value={sport}>
+                    {sport}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Kategori
-            </span>
-            <select
-              value={selectedCategory}
-              onChange={(event) => setSelectedCategory(event.target.value)}
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
-            >
-              <option value="all">Alla kategorier</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Kategori</span>
+              <select
+                value={selectedCategory}
+                onChange={(event) => setSelectedCategory(event.target.value)}
+                className="input-barnaktiv"
+              >
+                <option value="all">Alla kategorier</option>
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Ålder
-            </span>
-            <select
-              value={selectedAgeGroup}
-              onChange={(event) => setSelectedAgeGroup(event.target.value as AgeGroup)}
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
-            >
-              {ageGroups.map((ageGroup) => (
-                <option key={ageGroup.value} value={ageGroup.value}>
-                  {ageGroup.label}
-                </option>
-              ))}
-            </select>
-          </label>
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Ålder</span>
+              <select
+                value={selectedAgeGroup}
+                onChange={(event) => setSelectedAgeGroup(event.target.value as AgeGroup)}
+                className="input-barnaktiv"
+              >
+                {ageGroups.map((ageGroup) => (
+                  <option key={ageGroup.value} value={ageGroup.value}>
+                    {ageGroup.label}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-medium text-[color:var(--foreground)]">
-              Pris
-            </span>
-            <select
-              value={selectedPrice}
-              onChange={(event) => setSelectedPrice(event.target.value as PriceFilter)}
-              className="w-full rounded-2xl border border-[color:var(--border)] bg-white px-4 py-3 text-sm outline-none transition focus:border-[color:var(--accent)]"
-            >
-              {priceFilters.map((priceFilter) => (
-                <option key={priceFilter.value} value={priceFilter.value}>
-                  {priceFilter.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section id="aktiviteter" className="space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-[color:var(--foreground)]">
-              Aktiviteter att upptäcka
-            </h2>
-            <p className="mt-2 text-sm text-[color:var(--muted)]">
-              {isPending
-                ? "Uppdaterar resultat..."
-                : `${getResultSummary(activities.length)} efter dina val.`}
-            </p>
+            <label className="space-y-2">
+              <span className="label-barnaktiv">Pris</span>
+              <select
+                value={selectedPrice}
+                onChange={(event) => setSelectedPrice(event.target.value as PriceFilter)}
+                className="input-barnaktiv"
+              >
+                {priceFilters.map((priceFilter) => (
+                  <option key={priceFilter.value} value={priceFilter.value}>
+                    {priceFilter.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <div className="text-sm text-[color:var(--muted)]">
-            <p>
-              Sortering:{" "}
-              <span className="font-medium text-[color:var(--foreground)]">
-                {selectedSortLabel}
-              </span>
-            </p>
-            <p className="mt-1">Visar kort med bild, pris, ålder och anmälningsläge.</p>
-          </div>
-        </div>
+        </section>
 
-        {activities.length > 0 ? (
-          <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-            {activities.map((activity) => (
-              <ActivityCard key={activity.id} activity={activity} />
-            ))}
+        <section id="aktiviteter" className="space-y-6">
+          <div className="flex flex-col gap-3 border-b border-[color:var(--border)] pb-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight text-[color:var(--foreground)] sm:text-3xl">
+                Aktiviteter att upptäcka
+              </h2>
+              <p className="mt-2 text-sm text-[color:var(--muted)]">
+                {isPending
+                  ? "Uppdaterar resultat..."
+                  : `${getResultSummary(activities.length)} efter dina val.`}
+              </p>
+            </div>
+            <div className="text-sm text-[color:var(--muted)]">
+              <p>
+                Sortering:{" "}
+                <span className="font-semibold text-[color:var(--foreground)]">
+                  {selectedSortLabel}
+                </span>
+              </p>
+              <p className="mt-1 text-[color:var(--muted-foreground)]">
+                Kort med bild, pris, ålder och anmälningsläge.
+              </p>
+            </div>
           </div>
-        ) : (
-          <div className="rounded-[2rem] border border-dashed border-[color:var(--border)] bg-white px-6 py-12 text-center">
-            <h3 className="text-xl font-semibold text-[color:var(--foreground)]">
-              Inga aktiviteter matchade filtren.
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-[color:var(--muted)]">
-              Rensa filtren eller starta backend om API:t inte levererar data än.
-            </p>
-          </div>
-        )}
-      </section>
-    </main>
+
+          {activities.length > 0 ? (
+            <div className="grid gap-6 sm:gap-7 lg:grid-cols-2 xl:grid-cols-3">
+              {activities.map((activity) => (
+                <ActivityCard key={activity.id} activity={activity} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--border-strong)] bg-[color:var(--surface-strong)] px-6 py-14 text-center shadow-sm">
+              <h3 className="font-display text-xl font-semibold text-[color:var(--foreground)]">
+                Inga aktiviteter matchade filtren.
+              </h3>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[color:var(--muted)]">
+                Rensa filtren eller kontrollera att backend körs om listan är tom.
+              </p>
+              <button type="button" onClick={clearFilters} className="btn-primary mt-6">
+                Rensa alla filter
+              </button>
+            </div>
+          )}
+        </section>
+      </main>
+      <SiteFooter />
+    </>
   );
 }

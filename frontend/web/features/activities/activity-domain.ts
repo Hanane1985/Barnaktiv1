@@ -39,6 +39,21 @@ export function parseRegistrationStatus(raw: string): RegistrationStatus {
     : "Unknown";
 }
 
+export function registrationStatusLabelSv(status: RegistrationStatus): string {
+  switch (status) {
+    case "Open":
+      return "Öppen";
+    case "Upcoming":
+      return "Kommande";
+    case "Closed":
+      return "Stängd";
+    case "Full":
+      return "Fullbokad";
+    default:
+      return "Okänt";
+  }
+}
+
 export function formatPrice(price: number) {
   return price <= 0 ? "Gratis" : priceFormatter.format(price);
 }

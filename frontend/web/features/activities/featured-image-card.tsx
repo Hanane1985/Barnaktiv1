@@ -32,7 +32,7 @@ export function FeaturedImageCard({ activity, className = "" }: FeaturedImageCar
 
   return (
     <article
-      className={`relative overflow-hidden rounded-[2rem] border border-white/70 bg-[#fff8f1] shadow-[0_24px_70px_-36px_rgba(15,34,24,0.45)] ${className}`}
+      className={`relative overflow-hidden rounded-3xl border border-white/80 bg-[color:var(--surface)] shadow-[var(--card-shadow)] ring-1 ring-black/[0.04] ${className}`}
     >
       {showImage ? (
         <>
@@ -52,15 +52,15 @@ export function FeaturedImageCard({ activity, className = "" }: FeaturedImageCar
       )}
 
       <div className="relative flex h-full min-h-[14rem] flex-col justify-between p-5">
-        <span className="inline-flex w-fit rounded-full border border-white/40 bg-white px-3 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)]">
+        <span className="inline-flex w-fit rounded-full border border-white/50 bg-white/95 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm backdrop-blur-sm">
           {categoryLabel}
         </span>
 
-        <div className="max-w-[18rem] rounded-[1.6rem] border border-white/25 bg-[rgba(16,30,24,0.76)] p-4 text-white shadow-lg">
+        <div className="max-w-[18rem] rounded-2xl border border-white/20 bg-[rgba(22,38,32,0.82)] p-4 text-white shadow-xl backdrop-blur-md">
           <p className="text-xs uppercase tracking-[0.18em] text-white/70">
             {cityLabel}
           </p>
-          <h3 className="mt-2 text-xl font-semibold leading-tight">{title}</h3>
+          <h3 className="mt-2 font-display text-xl font-semibold leading-tight">{title}</h3>
           <p className="mt-2 text-sm leading-6 text-white/80">
             {supportingText}
           </p>
