@@ -15,9 +15,12 @@ public interface IActivityIngestionRepository
 
     Task RemoveActivitiesNotInExternalIdsAsync(
         string sourceKey,
-        IReadOnlyCollection<string> externalIds,
-        DateTime runStartedAtUtc,
+        IReadOnlyCollection<string> keepExternalIds,
         CancellationToken cancellationToken);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);
+
+    Task ExecuteInTransactionAsync(
+        Func<CancellationToken, Task> action,
+        CancellationToken cancellationToken);
 }

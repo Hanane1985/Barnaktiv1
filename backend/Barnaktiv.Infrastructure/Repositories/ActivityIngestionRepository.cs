@@ -55,26 +55,43 @@ public sealed class ActivityIngestionRepository(ApplicationDbContext dbContext)
 
     public async Task RemoveActivitiesNotInExternalIdsAsync(
         string sourceKey,
-        IReadOnlyCollection<string> externalIds,
-        DateTime runStartedAtUtc,
+        IReadOnlyCollection<string> keepExternalIds,
         CancellationToken cancellationToken)
     {
-        var externalIdSet = CreateExternalIdSet(externalIds);
+        var keepSet = CreateExternalIdSet(keepExternalIds);
 
-        if (externalIdSet.Count == 0)
+        if (keepSet.Count == 0)
         {
             return;
         }
 
         await dbContext.Activities
             .Where(activity => activity.SourceKey == sourceKey)
-            .Where(activity => activity.LastSeenAt == null || activity.LastSeenAt < runStartedAtUtc)
+            .Where(activity => !keepSet.Contains(activity.ExternalId))
             .ExecuteDeleteAsync(cancellationToken);
     }
 
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         return dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ExecuteInTransactionAsync(
+        Func<CancellationToken, Task> action,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction =
+            await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await action(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
     }
 
     private static HashSet<string> CreateExternalIdSet(IReadOnlyCollection<string> externalIds)

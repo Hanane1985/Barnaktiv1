@@ -407,7 +407,8 @@ export function ActivityExplorer({
 
         <section
           id="utforska"
-          className="card-surface overflow-hidden rounded-[1.75rem] sm:rounded-[2rem]"
+          aria-busy={isPending}
+          className={`card-surface overflow-hidden rounded-[1.75rem] sm:rounded-[2rem] transition-opacity duration-200 ${isPending ? "opacity-[0.92]" : "opacity-100"}`}
         >
           <div className="border-b border-[color:var(--border)] bg-[color:var(--surface)] px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
