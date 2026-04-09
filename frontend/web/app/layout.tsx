@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { DM_Sans, Fraunces } from "next/font/google";
+import Script from "next/script";
 
 import "./globals.css";
+
+const themeInitScript = `(function(){try{var t=localStorage.getItem("barnaktiv-theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");else if(t==="light")document.documentElement.setAttribute("data-theme","light");}catch(e){}})();`;
 
 const dmSans = DM_Sans({
   subsets: ["latin", "latin-ext"],
@@ -27,8 +30,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="sv" className={`${dmSans.variable} ${fraunces.variable}`}>
-      <body>{children}</body>
+    <html lang="sv" suppressHydrationWarning className={`${dmSans.variable} ${fraunces.variable}`}>
+      <body>
+        <Script id="barnaktiv-theme-init" strategy="beforeInteractive">
+          {themeInitScript}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

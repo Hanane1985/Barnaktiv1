@@ -235,13 +235,7 @@ export function ActivityExplorer({
     <>
       <SiteHeader />
       <main className="relative mx-auto flex min-h-screen w-full max-w-[86rem] flex-col gap-10 overflow-hidden px-4 pb-8 pt-6 sm:px-6 lg:gap-12 lg:px-8 lg:pb-12 lg:pt-8">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[32rem] opacity-90"
-          style={{
-            background:
-              "radial-gradient(ellipse 80% 60% at 50% -10%, rgba(232, 240, 236, 0.85) 0%, transparent 55%), radial-gradient(ellipse 50% 40% at 100% 20%, rgba(243, 224, 212, 0.5) 0%, transparent 50%)",
-          }}
-        />
+        <div className="hero-page-glow pointer-events-none absolute inset-x-0 top-0 -z-10 h-[32rem] opacity-95" />
 
         <section className="relative overflow-hidden rounded-[2rem] border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-6 py-8 shadow-[var(--card-shadow)] sm:rounded-[2.25rem] sm:px-8 sm:py-10 lg:px-10 lg:py-12">
           <div
@@ -345,12 +339,9 @@ export function ActivityExplorer({
         </section>
 
         {errorMessage ? (
-          <section
-            className="rounded-2xl border border-amber-200/90 bg-amber-50 px-5 py-4 text-sm text-amber-950 shadow-sm"
-            role="alert"
-          >
+          <section className="alert-banner px-5 py-4 text-sm" role="alert">
             <p className="font-semibold">Kunde inte hämta aktiviteter just nu.</p>
-            <p className="mt-2 leading-relaxed text-amber-950/90">
+            <p className="mt-2 leading-relaxed">
               {errorMessage} Starta <code>Barnaktiv.API</code> eller sätt{" "}
               <code>BARNAKTIV_API_BASE_URL</code> till rätt backendadress.
             </p>

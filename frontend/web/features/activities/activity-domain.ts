@@ -122,15 +122,15 @@ export function formatRegistrationSummary(activity: Activity) {
 export function getRegistrationBadgeClassName(status: RegistrationStatus) {
   switch (status) {
     case "Open":
-      return "bg-emerald-100 text-emerald-900";
+      return "badge-reg badge-reg--open";
     case "Upcoming":
-      return "bg-sky-100 text-sky-900";
+      return "badge-reg badge-reg--upcoming";
     case "Closed":
-      return "bg-stone-200 text-stone-800";
+      return "badge-reg badge-reg--closed";
     case "Full":
-      return "bg-amber-100 text-amber-950";
+      return "badge-reg badge-reg--full";
     default:
-      return "bg-white/80 text-[color:var(--muted)]";
+      return "badge-reg badge-reg--unknown";
   }
 }
 

@@ -22,7 +22,10 @@ export function HeroCollage({
 
   return (
     <div className="relative min-h-[24rem] lg:min-h-[31rem]">
-      <div className="pointer-events-none absolute -left-8 top-10 h-28 w-28 rounded-full bg-white/50 blur-3xl" />
+      <div
+        className="pointer-events-none absolute -left-8 top-10 h-28 w-28 rounded-full blur-3xl"
+        style={{ background: "var(--hero-blur-light)" }}
+      />
       <div className="pointer-events-none absolute right-0 top-0 h-40 w-40 rounded-full bg-[color:var(--accent-soft)]/60 blur-3xl" />
 
       <div className="grid h-full gap-4 sm:grid-cols-2">

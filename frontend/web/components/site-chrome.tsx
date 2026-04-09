@@ -1,39 +1,38 @@
 import Link from "next/link";
 
+import { ThemeToggle } from "@/components/theme-toggle";
+
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-[color:var(--border)] bg-[color:var(--surface-strong)]/85 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-[86rem] items-center justify-between gap-4 px-4 sm:h-16 sm:px-6 lg:px-8">
         <Link
           href="/"
-          className="group flex items-center gap-2.5 font-display text-lg font-semibold tracking-tight text-[color:var(--foreground)] sm:text-xl"
+          className="font-display text-lg font-semibold tracking-tight text-[color:var(--foreground)] transition hover:opacity-90 sm:text-xl"
         >
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-[color:var(--sage)] text-sm font-bold text-white shadow-sm transition group-hover:bg-[color:var(--accent)]"
-            aria-hidden
-          >
-            B
-          </span>
-          <span className="hidden sm:inline">Barnaktiv</span>
+          Barnaktiv
         </Link>
 
-        <nav
-          className="flex items-center gap-1 text-sm font-medium text-[color:var(--muted)]"
-          aria-label="Huvudnavigation"
-        >
-          <a
-            href="#utforska"
-            className="rounded-full px-3 py-2 transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
+        <div className="flex items-center gap-1 sm:gap-2">
+          <nav
+            className="flex items-center gap-1 text-sm font-medium text-[color:var(--muted)]"
+            aria-label="Huvudnavigation"
           >
-            Utforska
-          </a>
-          <a
-            href="#aktiviteter"
-            className="rounded-full px-3 py-2 transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
-          >
-            Aktiviteter
-          </a>
-        </nav>
+            <a
+              href="#utforska"
+              className="rounded-full px-3 py-2 transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
+            >
+              Utforska
+            </a>
+            <a
+              href="#aktiviteter"
+              className="rounded-full px-3 py-2 transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
+            >
+              Aktiviteter
+            </a>
+          </nav>
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

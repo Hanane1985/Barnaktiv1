@@ -32,7 +32,7 @@ export function FeaturedImageCard({ activity, className = "" }: FeaturedImageCar
 
   return (
     <article
-      className={`relative overflow-hidden rounded-3xl border border-white/80 bg-[color:var(--surface)] shadow-[var(--card-shadow)] ring-1 ring-black/[0.04] ${className}`}
+      className={`relative overflow-hidden rounded-3xl border border-[color:var(--border-strong)] bg-[color:var(--surface)] shadow-[var(--card-shadow)] ring-1 ring-[color:var(--foreground)]/[0.04] ${className}`}
     >
       {showImage ? (
         <>
@@ -48,11 +48,20 @@ export function FeaturedImageCard({ activity, className = "" }: FeaturedImageCar
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(14,26,21,0.08),rgba(14,26,21,0.72))]" />
         </>
       ) : (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_35%),linear-gradient(145deg,rgba(222,113,57,0.34),rgba(255,239,224,0.92)_56%,rgba(233,242,235,0.96))]" />
+        <div
+          className="absolute inset-0"
+          style={{ background: "var(--featured-fallback-grad)" }}
+        />
       )}
 
       <div className="relative flex h-full min-h-[14rem] flex-col justify-between p-5">
-        <span className="inline-flex w-fit rounded-full border border-white/50 bg-white/95 px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm backdrop-blur-sm">
+        <span
+          className="inline-flex w-fit rounded-full px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[color:var(--accent-strong)] shadow-sm backdrop-blur-sm"
+          style={{
+            border: "1px solid var(--image-chip-border)",
+            background: "var(--image-chip-bg)",
+          }}
+        >
           {categoryLabel}
         </span>
 

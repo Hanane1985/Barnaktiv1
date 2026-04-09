@@ -59,8 +59,11 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(17,29,24,0.08),rgba(17,29,24,0.54))]" />
           </>
         ) : (
-          <div className="flex h-full w-full flex-col justify-end bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.95),transparent_38%),linear-gradient(135deg,rgba(223,105,55,0.3),rgba(247,220,205,0.88)_60%,rgba(255,253,248,1))] p-4">
-            <div className="max-w-[14rem] rounded-[1.4rem] bg-white p-3.5">
+          <div
+            className="flex h-full w-full flex-col justify-end p-4"
+            style={{ background: "var(--media-fallback-grad)" }}
+          >
+            <div className="max-w-[14rem] rounded-[1.4rem] bg-[color:var(--surface-strong)] p-3.5 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--accent-strong)]">
                 Barnaktiv
               </p>
@@ -90,15 +93,11 @@ export function ActivityCard({ activity }: ActivityCardProps) {
               : null}
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <span className="rounded-full bg-white px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm">
+            <span className="rounded-full bg-[color:var(--surface-strong)] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-[color:var(--foreground)] shadow-sm">
               {formatPrice(activity.price)}
             </span>
             {registrationSummary ? (
-              <span
-                className={`rounded-full px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] shadow-sm ${getRegistrationBadgeClassName(
-                  registrationStatus,
-                )}`}
-              >
+              <span className={getRegistrationBadgeClassName(registrationStatus)}>
                 {registrationStatusLabelSv(registrationStatus)}
               </span>
             ) : null}
@@ -138,10 +137,10 @@ export function ActivityCard({ activity }: ActivityCardProps) {
           </div>
 
           <div className="flex flex-wrap gap-2 text-sm">
-            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-1.5 font-medium text-[color:var(--foreground)]">
+            <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-1.5 font-medium text-[color:var(--foreground)]">
               Stad: {cityLabel}
             </span>
-            <span className="rounded-full border border-[color:var(--border)] bg-white px-3 py-1.5 font-medium text-[color:var(--foreground)]">
+            <span className="rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-1.5 font-medium text-[color:var(--foreground)]">
               {"Ålder: "}
               {formatAgeRange(activity)}
             </span>
