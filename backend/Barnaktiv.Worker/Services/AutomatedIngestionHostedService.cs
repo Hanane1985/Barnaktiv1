@@ -1,8 +1,8 @@
-using Barnaktiv.API.Options;
 using Barnaktiv.Application.Interfaces;
+using Barnaktiv.Worker.Options;
 using Microsoft.Extensions.Options;
 
-namespace Barnaktiv.API.Services;
+namespace Barnaktiv.Worker.Services;
 
 public sealed class AutomatedIngestionHostedService(
     IServiceScopeFactory serviceScopeFactory,

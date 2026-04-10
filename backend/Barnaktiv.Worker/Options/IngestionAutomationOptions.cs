@@ -1,4 +1,4 @@
-namespace Barnaktiv.API.Options;
+namespace Barnaktiv.Worker.Options;
 
 public sealed class IngestionAutomationOptions
 {

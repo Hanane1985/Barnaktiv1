@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Barnaktiv.Worker</RootNamespace>
+    <UserSecretsId>dotnet-Barnaktiv.Worker-516b9611-3cfc-4875-86b9-4a5c1ecca3c8</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Barnaktiv.Application\Barnaktiv.Application.csproj" />
+    <ProjectReference Include="..\Barnaktiv.Infrastructure\Barnaktiv.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
