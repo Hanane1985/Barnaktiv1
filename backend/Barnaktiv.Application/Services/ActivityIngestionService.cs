@@ -1,5 +1,7 @@
-using System.Security.Cryptography;
+using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using Barnaktiv.Application.DTOs.Ingestion;
@@ -65,13 +67,30 @@ public sealed class ActivityIngestionService(
             {
                 scrapeResult = await scraper.ScrapeAsync(source, cancellationToken);
             }
-            catch (Exception exception)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                errors.Add($"[{source.SourceKey}] {exception.Message}");
+                throw;
+            }
+            catch (HttpRequestException exception)
+            {
+                errors.Add(FormatIngestionError(source.SourceKey, "Network", exception));
                 continue;
             }
-
-            sourcesProcessed++;
+            catch (TaskCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                errors.Add(FormatIngestionError(source.SourceKey, "Timeout", exception));
+                continue;
+            }
+            catch (IOException exception)
+            {
+                errors.Add(FormatIngestionError(source.SourceKey, "IO", exception));
+                continue;
+            }
+            catch (Exception exception)
+            {
+                errors.Add(FormatIngestionError(source.SourceKey, "Scrape", exception));
+                continue;
+            }
 
             foreach (var scrapeError in scrapeResult.Errors)
             {
@@ -82,96 +101,115 @@ public sealed class ActivityIngestionService(
                     .Select(item => item.ExternalId)
                     .ToList())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var existingActivitiesByExternalId = new Dictionary<string, Activity>(
-                await repository.GetBySourceKeyAndExternalIdsAsync(
-                    source.SourceKey,
-                    seenExternalIds,
-                    cancellationToken),
-                StringComparer.OrdinalIgnoreCase);
 
-            await repository.ExecuteInTransactionAsync(
-                async (transactionCancellation) =>
-                {
-                    var pendingChanges = 0;
+            try
+            {
+                var existingActivitiesByExternalId = new Dictionary<string, Activity>(
+                    await repository.GetBySourceKeyAndExternalIdsAsync(
+                        source.SourceKey,
+                        seenExternalIds,
+                        cancellationToken),
+                    StringComparer.OrdinalIgnoreCase);
 
-                    foreach (var item in scrapeResult.Items)
+                await repository.ExecuteInTransactionAsync(
+                    async (transactionCancellation) =>
                     {
-                        var now = DateTime.UtcNow;
+                        var pendingChanges = 0;
 
-                        if (!existingActivitiesByExternalId.TryGetValue(
-                                item.ExternalId,
-                                out var existingActivity))
+                        foreach (var item in scrapeResult.Items)
                         {
-                            var activity = new Activity
+                            var now = DateTime.UtcNow;
+
+                            if (!existingActivitiesByExternalId.TryGetValue(
+                                    item.ExternalId,
+                                    out var existingActivity))
+                            {
+                                var activity = new Activity
+                                {
+                                    SourceKey = source.SourceKey,
+                                    ExternalId = item.ExternalId,
+                                    CreatedAt = now,
+                                };
+
+                                ApplyItem(activity, item);
+                                activity.Source = source.Name;
+                                activity.UpdatedAt = now;
+                                activity.LastSeenAt = now;
+
+                                await repository.AddActivityAsync(activity, transactionCancellation);
+                                existingActivitiesByExternalId[item.ExternalId] = activity;
+                                activitiesCreated++;
+                            }
+                            else
+                            {
+                                ApplyItem(existingActivity, item);
+                                existingActivity.Source = source.Name;
+                                existingActivity.UpdatedAt = now;
+                                existingActivity.LastSeenAt = now;
+                                activitiesUpdated++;
+                            }
+
+                            var rawPayload = new RawActivityPayload
                             {
                                 SourceKey = source.SourceKey,
                                 ExternalId = item.ExternalId,
-                                CreatedAt = now,
+                                ContentHash = ComputeHash(item.RawPayload),
+                                Payload = item.RawPayload,
+                                FetchedAt = now,
+                                ImportedAt = now,
                             };
 
-                            ApplyItem(activity, item);
-                            activity.Source = source.Name;
-                            activity.UpdatedAt = now;
-                            activity.LastSeenAt = now;
+                            await repository.AddRawPayloadAsync(rawPayload, transactionCancellation);
+                            payloadsStored++;
+                            pendingChanges++;
 
-                            await repository.AddActivityAsync(activity, transactionCancellation);
-                            existingActivitiesByExternalId[item.ExternalId] = activity;
-                            activitiesCreated++;
-                        }
-                        else
-                        {
-                            ApplyItem(existingActivity, item);
-                            existingActivity.Source = source.Name;
-                            existingActivity.UpdatedAt = now;
-                            existingActivity.LastSeenAt = now;
-                            activitiesUpdated++;
+                            if (pendingChanges >= SaveBatchSize)
+                            {
+                                await repository.SaveChangesAsync(transactionCancellation);
+                                pendingChanges = 0;
+                            }
                         }
 
-                        var rawPayload = new RawActivityPayload
-                        {
-                            SourceKey = source.SourceKey,
-                            ExternalId = item.ExternalId,
-                            ContentHash = ComputeHash(item.RawPayload),
-                            Payload = item.RawPayload,
-                            FetchedAt = now,
-                            ImportedAt = now,
-                        };
+                        var canRemoveMissingActivities =
+                            seenExternalIds.Count > 0 &&
+                            scrapeResult.CanRemoveMissingActivities;
 
-                        await repository.AddRawPayloadAsync(rawPayload, transactionCancellation);
-                        payloadsStored++;
-                        pendingChanges++;
-
-                        if (pendingChanges >= SaveBatchSize)
+                        if (canRemoveMissingActivities && pendingChanges > 0)
                         {
                             await repository.SaveChangesAsync(transactionCancellation);
                             pendingChanges = 0;
                         }
-                    }
 
-                    var canRemoveMissingActivities =
-                        seenExternalIds.Count > 0 &&
-                        scrapeResult.CanRemoveMissingActivities;
+                        if (canRemoveMissingActivities)
+                        {
+                            await repository.RemoveActivitiesNotInExternalIdsAsync(
+                                source.SourceKey,
+                                seenExternalIds,
+                                transactionCancellation);
+                        }
 
-                    if (canRemoveMissingActivities && pendingChanges > 0)
-                    {
-                        await repository.SaveChangesAsync(transactionCancellation);
-                        pendingChanges = 0;
-                    }
+                        if (pendingChanges > 0)
+                        {
+                            await repository.SaveChangesAsync(transactionCancellation);
+                        }
+                    },
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                errors.Add(
+                    FormatIngestionError(
+                        source.SourceKey,
+                        ClassifyPersistenceException(exception),
+                        exception));
+                continue;
+            }
 
-                    if (canRemoveMissingActivities)
-                    {
-                        await repository.RemoveActivitiesNotInExternalIdsAsync(
-                            source.SourceKey,
-                            seenExternalIds,
-                            transactionCancellation);
-                    }
-
-                    if (pendingChanges > 0)
-                    {
-                        await repository.SaveChangesAsync(transactionCancellation);
-                    }
-                },
-                cancellationToken);
+            sourcesProcessed++;
         }
 
         return new IngestionRunDto(
@@ -309,5 +347,37 @@ public sealed class ActivityIngestionService(
     private static DateTime? PreferIncoming(DateTime? incoming, DateTime? current)
     {
         return incoming ?? current;
+    }
+
+    private static string FormatIngestionError(string sourceKey, string category, Exception exception)
+    {
+        var message = exception.Message;
+
+        if (exception.InnerException is { Message: { Length: > 0 } innerMessage })
+        {
+            message = $"{message} ({innerMessage})";
+        }
+
+        return $"[{sourceKey}] [{category}] {message}";
+    }
+
+    private static string ClassifyPersistenceException(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var name = current.GetType().Name;
+
+            if (name is "DbUpdateException" or "DbUpdateConcurrencyException")
+            {
+                return "Database";
+            }
+
+            if (name is "InvalidOperationException")
+            {
+                return "InvalidOperation";
+            }
+        }
+
+        return "Persistence";
     }
 }
