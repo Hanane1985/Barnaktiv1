@@ -1,5 +1,6 @@
 namespace Barnaktiv.Application.DTOs.Activities;
 
+/// <summary>Public list item for GET /api/activities (camelCase JSON). Kept aligned with <c>frontend/web/lib/activity-api-schema.ts</c>.</summary>
 public sealed record ActivityDto(
     Guid Id,
     string Title,

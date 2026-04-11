@@ -3,30 +3,12 @@ import {
   defaultActivityFilters,
   type ActivityFilters,
 } from "@/lib/activity-filters";
+import {
+  type Activity,
+  parseActivitiesResponse,
+} from "@/lib/activity-api-schema";
 
-export type Activity = {
-  id: string;
-  title: string;
-  description: string;
-  organizer: string;
-  location: string;
-  city: string;
-  ageFrom: number;
-  ageTo: number;
-  sport: string;
-  category: string;
-  listingType: string;
-  date: string;
-  price: number;
-  websiteUrl: string;
-  signupUrl: string;
-  imageUrl: string;
-  source: string;
-  registrationStatus: string;
-  registrationOpenAt: string | null;
-  registrationCloseAt: string | null;
-  createdAt: string;
-};
+export type { Activity };
 
 export type ActivitiesResult = {
   activities: Activity[];
@@ -69,20 +51,19 @@ export async function getActivities(
       };
     }
 
-    const payload = (await response.json()) as unknown;
+    const payload: unknown = await response.json();
+    const parsed = parseActivitiesResponse(payload);
 
-    if (!Array.isArray(payload)) {
+    if (!parsed.ok) {
       return {
         activities: [],
         apiBaseUrl,
-        errorMessage: "The API response shape was not an activities array.",
+        errorMessage: parsed.message,
       };
     }
 
-    const activities = payload as Activity[];
-
     return {
-      activities,
+      activities: parsed.activities,
       apiBaseUrl,
     };
   } catch (error) {
