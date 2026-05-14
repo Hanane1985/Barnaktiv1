@@ -110,5 +110,3 @@ cd frontend/web
 npm run lint
 npm run build
 ```
-
-GitHub Actions also runs these checks through `.github/workflows/ci.yml`.
