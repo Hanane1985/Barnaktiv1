@@ -5,9 +5,32 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+const string CorsPolicyName = "ConfiguredFrontend";
+var corsAllowedOrigins = builder.Configuration
+    .GetSection("Cors:AllowedOrigins")
+    .Get<string[]>()
+    ?.Where(origin => !string.IsNullOrWhiteSpace(origin))
+    .Select(origin => origin.Trim().TrimEnd('/'))
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray() ?? [];
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddProblemDetails();
+builder.Services.AddHealthChecks();
+if (corsAllowedOrigins.Length > 0)
+{
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy(CorsPolicyName, policy =>
+        {
+            policy
+                .WithOrigins(corsAllowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        });
+    });
+}
 builder.Services
     .AddOptions<AdminApiKeyOptions>()
     .BindConfiguration(AdminApiKeyOptions.SectionName)
@@ -54,10 +77,20 @@ if (app.Environment.IsDevelopment())
     app.MapGet("/", () => Results.Redirect("/swagger"))
         .ExcludeFromDescription();
 }
+else
+{
+    app.UseExceptionHandler();
+}
 
+if (corsAllowedOrigins.Length > 0)
+{
+    app.UseCors(CorsPolicyName);
+}
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health")
+    .AllowAnonymous();
 app.MapControllers();
 
 app.Run();
