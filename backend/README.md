@@ -2,6 +2,7 @@ Backend services for Barnaktiv.
 
 ## Projects
 
+
 - `Barnaktiv.API`: public activities API and protected admin ingestion endpoints.
 - `Barnaktiv.Worker`: scheduled ingestion service.
 - `Barnaktiv.Application`: use cases, DTOs and service interfaces.
