@@ -23,6 +23,8 @@
     0 24px 48px -16px rgba(28, 43, 36, 0.14);
   --ring-accent: rgba(216, 90, 44, 0.22);
   --code-bg: rgba(28, 43, 36, 0.06);
+  --font-body: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
   --font-brand-mono: "Cascadia Mono", "Consolas", monospace;
 
   --body-radial-1: rgba(255, 248, 240, 0.95);

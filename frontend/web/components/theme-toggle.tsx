@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 type ThemePreference = "light" | "dark" | "system";
 
@@ -42,21 +42,33 @@ function applyTheme(preference: ThemePreference) {
   }
 }
 
-export function ThemeToggle() {
-  const [preference, setPreference] = useState<ThemePreference>("system");
+function subscribeToThemeChanges(onStoreChange: () => void) {
+  window.addEventListener("barnaktiv-theme-change", onStoreChange);
+  window.addEventListener("storage", onStoreChange);
 
-  useLayoutEffect(() => {
-    setPreference(readStoredTheme());
-  }, []);
+  return () => {
+    window.removeEventListener("barnaktiv-theme-change", onStoreChange);
+    window.removeEventListener("storage", onStoreChange);
+  };
+}
+
+function getServerThemeSnapshot(): ThemePreference {
+  return "system";
+}
+
+export function ThemeToggle() {
+  const preference = useSyncExternalStore(
+    subscribeToThemeChanges,
+    readStoredTheme,
+    getServerThemeSnapshot,
+  );
 
   const cycle = useCallback(() => {
-    setPreference((current) => {
-      const next: ThemePreference =
-        current === "light" ? "dark" : current === "dark" ? "system" : "light";
-      applyTheme(next);
-      return next;
-    });
-  }, []);
+    const next: ThemePreference =
+      preference === "light" ? "dark" : preference === "dark" ? "system" : "light";
+    applyTheme(next);
+    window.dispatchEvent(new Event("barnaktiv-theme-change"));
+  }, [preference]);
 
   const label =
     preference === "light"
