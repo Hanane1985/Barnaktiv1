@@ -1,0 +1,30 @@
+name: Scheduled ingestion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  run-ingestion:
+    name: Run production ingestion
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger ingestion
+        env:
+          BARNAKTIV_API_BASE_URL: ${{ secrets.BARNAKTIV_API_BASE_URL }}
+          BARNAKTIV_ADMIN_API_KEY: ${{ secrets.BARNAKTIV_ADMIN_API_KEY }}
+          BARNAKTIV_ADMIN_HEADER_NAME: ${{ secrets.BARNAKTIV_ADMIN_HEADER_NAME || 'X-Barnaktiv-Admin-Key' }}
+        run: |
+          test -n "$BARNAKTIV_API_BASE_URL"
+          test -n "$BARNAKTIV_ADMIN_API_KEY"
+
+          curl --fail-with-body --show-error --silent \
+            --request POST \
+            --max-time 600 \
+            --header "$BARNAKTIV_ADMIN_HEADER_NAME: $BARNAKTIV_ADMIN_API_KEY" \
+            "${BARNAKTIV_API_BASE_URL%/}/api/admin/ingestion/run"
