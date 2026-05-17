@@ -17,4 +17,8 @@ public sealed class ActivityPersistenceQuery
     public ActivityPriceFilterOption PriceFilter { get; init; }
 
     public ActivitySortOption Sort { get; init; }
+
+    public int Skip { get; init; }
+
+    public int Take { get; init; }
 }

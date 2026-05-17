@@ -17,6 +17,8 @@ export type ActivitiesResult = {
 };
 
 const DEFAULT_API_BASE_URL = "http://localhost:5289";
+const ACTIVITY_PAGE_SIZE = 300;
+const MAX_ACTIVITY_PAGES = 20;
 
 function getApiBaseUrl() {
   const configuredBaseUrl =
@@ -30,40 +32,50 @@ export async function getActivities(
   filters: ActivityFilters = defaultActivityFilters,
 ): Promise<ActivitiesResult> {
   const apiBaseUrl = getApiBaseUrl();
-  const queryString = buildActivityApiSearchParams(filters).toString();
-  const requestUrl = queryString
-    ? `${apiBaseUrl}/api/activities?${queryString}`
-    : `${apiBaseUrl}/api/activities`;
+  const baseParams = buildActivityApiSearchParams(filters);
+  const activities: Activity[] = [];
 
   try {
-    const response = await fetch(requestUrl, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-      },
-    });
+    for (let page = 0; page < MAX_ACTIVITY_PAGES; page++) {
+      const params = new URLSearchParams(baseParams);
+      params.set("skip", (page * ACTIVITY_PAGE_SIZE).toString());
+      params.set("take", ACTIVITY_PAGE_SIZE.toString());
 
-    if (!response.ok) {
-      return {
-        activities: [],
-        apiBaseUrl,
-        errorMessage: `The API returned ${response.status} ${response.statusText}.`,
-      };
-    }
+      const response = await fetch(`${apiBaseUrl}/api/activities?${params.toString()}`, {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+        },
+      });
 
-    const payload: unknown = await response.json();
-    const parsed = parseActivitiesResponse(payload);
+      if (!response.ok) {
+        return {
+          activities: [],
+          apiBaseUrl,
+          errorMessage: `The API returned ${response.status} ${response.statusText}.`,
+        };
+      }
 
-    if (!parsed.ok) {
-      return {
-        activities: [],
-        apiBaseUrl,
-        errorMessage: parsed.message,
-      };
+      const payload: unknown = await response.json();
+      const parsed = parseActivitiesResponse(payload);
+
+      if (!parsed.ok) {
+        return {
+          activities: [],
+          apiBaseUrl,
+          errorMessage: parsed.message,
+        };
+      }
+
+      activities.push(...parsed.activities);
+
+      if (parsed.activities.length < ACTIVITY_PAGE_SIZE) {
+        break;
+      }
     }
 
     return {
-      activities: parsed.activities,
+      activities,
       apiBaseUrl,
     };
   } catch (error) {

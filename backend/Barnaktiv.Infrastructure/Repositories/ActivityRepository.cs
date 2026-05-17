@@ -66,7 +66,10 @@ public sealed class ActivityRepository(ApplicationDbContext dbContext) : IActivi
 
         activities = ApplySorting(activities, query.Sort);
 
-        return await activities.ToListAsync(cancellationToken);
+        return await activities
+            .Skip(query.Skip)
+            .Take(query.Take)
+            .ToListAsync(cancellationToken);
     }
 
     private static IQueryable<Activity> ApplySorting(

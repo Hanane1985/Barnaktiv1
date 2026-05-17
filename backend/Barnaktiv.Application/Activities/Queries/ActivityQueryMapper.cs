@@ -4,6 +4,9 @@ namespace Barnaktiv.Application.Activities.Queries;
 
 public static class ActivityQueryMapper
 {
+    private const int DefaultTake = 300;
+    private const int MaxTake = 500;
+
     public static ActivityPersistenceQuery ToPersistenceQuery(ActivityQueryDto query)
     {
         return new ActivityPersistenceQuery
@@ -16,6 +19,8 @@ public static class ActivityQueryMapper
             MaxAge = query.MaxAge,
             PriceFilter = MapPriceFilter(query.Price),
             Sort = MapSortOption(query.Sort),
+            Skip = NormalizeSkip(query.Skip),
+            Take = NormalizeTake(query.Take),
         };
     }
 
@@ -74,5 +79,25 @@ public static class ActivityQueryMapper
             "title-asc" => ActivitySortOption.TitleAscending,
             _ => ActivitySortOption.DateAscending,
         };
+    }
+
+    private static int NormalizeTake(int? take)
+    {
+        if (!take.HasValue || take.Value <= 0)
+        {
+            return DefaultTake;
+        }
+
+        return Math.Min(take.Value, MaxTake);
+    }
+
+    private static int NormalizeSkip(int? skip)
+    {
+        if (!skip.HasValue || skip.Value <= 0)
+        {
+            return 0;
+        }
+
+        return skip.Value;
     }
 }

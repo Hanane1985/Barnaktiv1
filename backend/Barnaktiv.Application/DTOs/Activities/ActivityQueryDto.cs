@@ -19,4 +19,8 @@ public sealed class ActivityQueryDto
     public string? Price { get; set; }
 
     public string? Sort { get; set; }
+
+    public int? Skip { get; set; }
+
+    public int? Take { get; set; }
 }
