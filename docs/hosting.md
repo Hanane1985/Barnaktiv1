@@ -27,6 +27,8 @@ Deploy `backend/Barnaktiv.API` as the web application.
 After the database is created, run EF Core migrations against the production connection string:
 
 ```powershell
+$env:ConnectionStrings__DefaultConnection="<monster-mssql-connection-string>"
+
 dotnet ef database update `
   --project backend/Barnaktiv.Infrastructure `
   --startup-project backend/Barnaktiv.API
@@ -35,7 +37,7 @@ dotnet ef database update `
 Verify the API:
 
 ```powershell
-Invoke-RestMethod https://<api-domain>/health
+Invoke-RestMethod http://barnaktiv.runasp.net/health
 ```
 
 ## 2. Frontend on Vercel
@@ -56,7 +58,7 @@ Output: Next.js default
 Set this environment variable in Vercel:
 
 ```text
-BARNAKTIV_API_BASE_URL=https://<api-domain>
+BARNAKTIV_API_BASE_URL=http://barnaktiv.runasp.net
 ```
 
 After Vercel gives you the production URL, update the API host setting:
@@ -70,13 +72,14 @@ Cors__AllowedOrigins__0=https://www.barnaktiv.se
 The repository includes `.github/workflows/ingestion.yml`. It calls:
 
 ```text
-POST /api/admin/ingestion/run
+GET /api/admin/ingestion/sources
+POST /api/admin/ingestion/run/{sourceKey}
 ```
 
 Add these GitHub repository secrets:
 
 ```text
-BARNAKTIV_API_BASE_URL=https://<api-domain>
+BARNAKTIV_API_BASE_URL=http://barnaktiv.runasp.net
 BARNAKTIV_ADMIN_API_KEY=<same value as AdminApiKey__ApiKey>
 BARNAKTIV_ADMIN_HEADER_NAME=X-Barnaktiv-Admin-Key
 ```

@@ -29,4 +29,15 @@ public sealed class IngestionController(IActivityIngestionService ingestionServi
         var result = await ingestionService.RunAsync(cancellationToken);
         return Ok(result);
     }
+
+    /// <summary>Runs one enabled ingestion source and stores payloads plus normalized activities.</summary>
+    [HttpPost("run/{sourceKey}")]
+    [ProducesResponseType(typeof(IngestionRunDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IngestionRunDto>> RunSource(
+        string sourceKey,
+        CancellationToken cancellationToken)
+    {
+        var result = await ingestionService.RunAsync(cancellationToken, sourceKey);
+        return Ok(result);
+    }
 }

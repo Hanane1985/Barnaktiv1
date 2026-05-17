@@ -36,13 +36,20 @@ public sealed class ActivityIngestionService(
         return Task.FromResult(sources);
     }
 
-    public async Task<IngestionRunDto> RunAsync(CancellationToken cancellationToken)
+    public async Task<IngestionRunDto> RunAsync(
+        CancellationToken cancellationToken,
+        string? sourceKey = null)
     {
         using var runHandle = await executionGate.AcquireAsync(cancellationToken);
 
         var startedAt = DateTime.UtcNow;
         var configuredSources = sourceProvider.GetSources();
-        var enabledSources = configuredSources.Where(source => source.IsEnabled).ToList();
+        var enabledSources = configuredSources
+            .Where(source => source.IsEnabled)
+            .Where(source =>
+                string.IsNullOrWhiteSpace(sourceKey) ||
+                string.Equals(source.SourceKey, sourceKey, StringComparison.OrdinalIgnoreCase))
+            .ToList();
         var scraperMap = scrapers.ToDictionary(
             scraper => scraper.Kind,
             StringComparer.OrdinalIgnoreCase);
@@ -51,6 +58,11 @@ public sealed class ActivityIngestionService(
         var activitiesUpdated = 0;
         var payloadsStored = 0;
         var sourcesProcessed = 0;
+
+        if (!string.IsNullOrWhiteSpace(sourceKey) && enabledSources.Count == 0)
+        {
+            errors.Add($"[{sourceKey}] No enabled ingestion source is configured for this key.");
+        }
 
         foreach (var source in enabledSources)
         {
