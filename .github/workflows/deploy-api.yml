@@ -46,13 +46,14 @@ jobs:
       - name: Test
         run: dotnet test Barnaktiv.sln --configuration Release --no-build --verbosity normal
 
+      # Must not use --no-build here: the Release build above is Any CPU; win-x86 needs its
+      # own restore graph (NETSDK1047 if assets lack net9.0/win-x86).
       - name: Publish API (win-x86 for MonsterASP)
         run: >
           dotnet publish backend/Barnaktiv.API/Barnaktiv.API.csproj
           --configuration Release
           --output ./publish
           --runtime win-x86
-          --no-build
 
       - name: Deploy to MonsterASP.NET
         uses: rasmusbuchholdt/simply-web-deploy@2.2.0
