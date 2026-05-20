@@ -24,6 +24,35 @@ Cors__AllowedOrigins__0=https://www.barnaktiv.se
 
 Deploy `backend/Barnaktiv.API` as the web application.
 
+### Automatic deploy (GitHub Actions)
+
+The repository includes `.github/workflows/deploy-api.yml`. On every push to `main` or `master` that changes files under `backend/`, GitHub Actions will build, run tests, publish the API for **win-x86** (MonsterASP requirement), and deploy with **Web Deploy**.
+
+1. In the [MonsterASP control panel](https://admin.monsterasp.net/), enable **Web Deploy** and copy the four values shown there.
+2. In your GitHub repo → **Settings → Secrets and variables → Actions**, add:
+
+```text
+WEBSITE_NAME
+SERVER_COMPUTER_NAME
+SERVER_USERNAME
+SERVER_PASSWORD
+```
+
+Example shape (values come from Monster, not from this doc):
+
+```text
+WEBSITE_NAME: siteXXXX
+SERVER_COMPUTER_NAME: https://siteXXXX.siteasp.net:8172
+SERVER_USERNAME: siteXXXX
+SERVER_PASSWORD: *********
+```
+
+You can also run **Deploy API to MonsterASP** manually under the Actions tab (**workflow_dispatch**).
+
+Until these secrets exist, the deploy workflow will fail at the Web Deploy step (build and tests still validate the branch).
+
+### First-time database setup
+
 After the database is created, run EF Core migrations against the production connection string:
 
 ```powershell

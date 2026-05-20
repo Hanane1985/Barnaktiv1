@@ -1,0 +1,64 @@
+# Deploy Barnaktiv.API to MonsterASP.NET via Web Deploy (official Monster pattern).
+# https://help.monsterasp.net/books/github/page/how-to-deploy-website-via-github-actions
+#
+# Add these repository secrets (Hosting Control Panel → WebDeploy):
+#   WEBSITE_NAME, SERVER_COMPUTER_NAME, SERVER_USERNAME, SERVER_PASSWORD
+
+name: Deploy API to MonsterASP
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: monsterasp-api-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build, test, publish, Web Deploy
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Restore
+        run: dotnet restore Barnaktiv.sln
+
+      - name: Build
+        run: dotnet build Barnaktiv.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test Barnaktiv.sln --configuration Release --no-build --verbosity normal
+
+      - name: Publish API (win-x86 for MonsterASP)
+        run: >
+          dotnet publish backend/Barnaktiv.API/Barnaktiv.API.csproj
+          --configuration Release
+          --output ./publish
+          --runtime win-x86
+          --no-build
+
+      - name: Deploy to MonsterASP.NET
+        uses: rasmusbuchholdt/simply-web-deploy@2.2.0
+        with:
+          website-name: ${{ secrets.WEBSITE_NAME }}
+          server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
+          server-username: ${{ secrets.SERVER_USERNAME }}
+          server-password: ${{ secrets.SERVER_PASSWORD }}
+          source-path: "./publish/"
