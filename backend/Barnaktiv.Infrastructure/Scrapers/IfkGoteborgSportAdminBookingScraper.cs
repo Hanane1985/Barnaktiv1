@@ -13,7 +13,7 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
 {
     private const string Organizer = "IFK G\u00f6teborg";
     private const string City = "G\u00f6teborg";
-    private const int DetailRequestConcurrency = 8;
+    private const int DetailRequestConcurrency = 12;
 
     private static readonly Regex GroupRowRegex = new(
         "<div class='grupplist-row' id='grupp(?<id>\\d+)'.*?<h4>(?<title>.*?)</h4>.*?<div class=\"resp-small-label\">\u00c5lder:</div>\\s*(?<age>.*?)\\s*</div>.*?<div class=\"resp-small-label\">Plats:</div>\\s*(?<place>.*?)\\s*</div>.*?<div class=\"resp-small-label\">\u00d6ppnas:</div>\\s*(?<open>.*?)\\s*</div>.*?<div class=\"grupplist-statusbox [^\"]+\">\\s*(?<status>.*?)\\s*</div>.*?(?:(?<spots>\\d+)\\s+platser\\s+kvar)?",

@@ -16,11 +16,10 @@ jobs:
   run-ingestion:
     name: Run production ingestion
     runs-on: ubuntu-latest
-    # Full sweep: many sources; slow SportAdmin scrapers may need tens of minutes each.
-    timeout-minutes: 360
+    timeout-minutes: 15
 
     steps:
-      - name: Trigger ingestion
+      - name: Queue ingestion jobs
         env:
           BARNAKTIV_API_BASE_URL: ${{ secrets.BARNAKTIV_API_BASE_URL }}
           BARNAKTIV_ADMIN_API_KEY: ${{ secrets.BARNAKTIV_ADMIN_API_KEY }}
@@ -38,13 +37,15 @@ jobs:
             | python -c "import json,sys; [print(s['sourceKey']) for s in json.load(sys.stdin) if s.get('isEnabled')]" \
             | while IFS= read -r SOURCE_KEY; do
                 test -n "$SOURCE_KEY"
-                echo "Running ingestion source: $SOURCE_KEY"
+                echo "Queueing ingestion source: $SOURCE_KEY"
                 curl --fail-with-body --show-error --silent \
                   --request POST \
                   --data '' \
                   --connect-timeout 60 \
-                  --max-time 1800 \
+                  --max-time 120 \
                   --header "$BARNAKTIV_ADMIN_HEADER_NAME: $BARNAKTIV_ADMIN_API_KEY" \
                   "${BARNAKTIV_API_BASE_URL%/}/api/admin/ingestion/run/$SOURCE_KEY"
                 echo
               done
+
+          echo "All sources queued. Scraping runs on the API host in the background."

@@ -1,4 +1,5 @@
 using Barnaktiv.API.Auth;
+using Barnaktiv.API.Services;
 using Barnaktiv.Application;
 using Barnaktiv.Infrastructure;
 using Microsoft.AspNetCore.Authentication;
@@ -66,6 +67,7 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddBackgroundIngestion();
 
 var app = builder.Build();
 

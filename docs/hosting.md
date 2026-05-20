@@ -102,8 +102,11 @@ The repository includes `.github/workflows/ingestion.yml`. It calls:
 
 ```text
 GET /api/admin/ingestion/sources
-POST /api/admin/ingestion/run/{sourceKey}
+POST /api/admin/ingestion/run/{sourceKey}   → 202 Accepted (job queued; work runs on the API host)
+GET /api/admin/ingestion/jobs/{jobId}     → optional status check
 ```
+
+GitHub Actions only **queues** one job per source (a few seconds total). Slow scrapers such as IFK SportAdmin run in the **background** on Monster, so the workflow does not wait 30+ minutes.
 
 Add these GitHub repository secrets:
 

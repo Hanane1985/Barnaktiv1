@@ -13,7 +13,7 @@ public sealed class SlsGoteborgSportAdminBookingScraper(HttpClient httpClient) :
 {
     private const string Organizer = "SLS Göteborg";
     private const string City = "Göteborg";
-    private const int DetailRequestConcurrency = 8;
+    private const int DetailRequestConcurrency = 12;
 
     private static readonly Regex GroupRowStartRegex = new(
         "<div class='grupplist-row' id='grupp(?<id>\\d+)'",
