@@ -69,5 +69,5 @@ jobs:
           server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
           server-username: ${{ secrets.SERVER_USERNAME }}
           server-password: ${{ secrets.SERVER_PASSWORD }}
-          # MSDeploy on Windows does not resolve "./publish/" (FileOrFolderNotFound).
-          source-path: '${{ github.workspace }}\publish\'
+          # Relative path only: MSDeploy prepends the working dir; absolute paths get doubled.
+          source-path: 'publish\'
