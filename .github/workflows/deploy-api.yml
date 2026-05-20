@@ -46,16 +46,16 @@ jobs:
       - name: Test
         run: dotnet test Barnaktiv.sln --configuration Release --no-build --verbosity normal
 
-      # Must not use --no-build here: the Release build above is Any CPU; win-x86 needs its
-      # own restore graph (NETSDK1047 if assets lack net9.0/win-x86).
-      - name: Publish API (win-x86 for MonsterASP)
+      # Must not use --no-build here: the Release build above is Any CPU; the RID needs its
+      # own restore graph (NETSDK1047). Monster IIS runs 64-bit — win-x86 causes FileLoadException.
+      - name: Publish API (win-x64 for MonsterASP)
         shell: pwsh
         run: |
           $publish = Join-Path $env:GITHUB_WORKSPACE 'publish'
           dotnet publish backend/Barnaktiv.API/Barnaktiv.API.csproj `
             --configuration Release `
             --output $publish `
-            --runtime win-x86
+            --runtime win-x64
           if (-not (Test-Path (Join-Path $publish 'Barnaktiv.API.dll'))) {
             throw "Publish output missing Barnaktiv.API.dll in $publish"
           }
