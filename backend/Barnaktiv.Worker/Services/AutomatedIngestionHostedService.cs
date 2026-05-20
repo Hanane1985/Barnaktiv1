@@ -56,21 +56,63 @@ public sealed class AutomatedIngestionHostedService(
 
             logger.LogInformation("Automated ingestion run started at {StartedAtUtc}.", runStartedAt);
 
-            var result = await ingestionService.RunAsync(cancellationToken);
+            // Run each enabled source separately so the global ingestion lock is not held for the
+            // entire sweep. Otherwise admin triggers (e.g. GitHub Actions) can block on the gate
+            // until the full automated run finishes, often exceeding HTTP client timeouts.
+            var sources = await ingestionService.GetSourcesAsync(cancellationToken);
+            var enabledSources = sources.Where(source => source.IsEnabled).ToList();
+
+            if (enabledSources.Count == 0)
+            {
+                logger.LogInformation("Automated ingestion skipped: no enabled sources.");
+                return;
+            }
+
+            var totalErrors = 0;
+            var totalCreated = 0;
+            var totalUpdated = 0;
+            var totalPayloads = 0;
+            var totalProcessed = 0;
+
+            foreach (var source in enabledSources)
+            {
+                logger.LogInformation("Automated ingestion starting source {SourceKey}.", source.SourceKey);
+
+                var result = await ingestionService.RunAsync(cancellationToken, source.SourceKey);
+
+                totalProcessed += result.SourcesProcessed;
+                totalCreated += result.ActivitiesCreated;
+                totalUpdated += result.ActivitiesUpdated;
+                totalPayloads += result.PayloadsStored;
+                totalErrors += result.Errors.Count;
+
+                logger.LogInformation(
+                    "Automated ingestion finished source {SourceKey}. SourcesProcessed: {SourcesProcessed}/{ConfiguredSources}, ActivitiesCreated: {ActivitiesCreated}, ActivitiesUpdated: {ActivitiesUpdated}, PayloadsStored: {PayloadsStored}, Errors: {ErrorCount}.",
+                    source.SourceKey,
+                    result.SourcesProcessed,
+                    result.SourcesConfigured,
+                    result.ActivitiesCreated,
+                    result.ActivitiesUpdated,
+                    result.PayloadsStored,
+                    result.Errors.Count);
+
+                foreach (var error in result.Errors)
+                {
+                    logger.LogWarning(
+                        "Automated ingestion reported an error for {SourceKey}: {Error}",
+                        source.SourceKey,
+                        error);
+                }
+            }
 
             logger.LogInformation(
-                "Automated ingestion completed. SourcesProcessed: {SourcesProcessed}/{ConfiguredSources}, ActivitiesCreated: {ActivitiesCreated}, ActivitiesUpdated: {ActivitiesUpdated}, PayloadsStored: {PayloadsStored}, Errors: {ErrorCount}.",
-                result.SourcesProcessed,
-                result.SourcesConfigured,
-                result.ActivitiesCreated,
-                result.ActivitiesUpdated,
-                result.PayloadsStored,
-                result.Errors.Count);
-
-            foreach (var error in result.Errors)
-            {
-                logger.LogWarning("Automated ingestion reported an error: {Error}", error);
-            }
+                "Automated ingestion sweep completed. SourcesRun: {SourcesRun}, TotalSourcesProcessed: {TotalSourcesProcessed}, ActivitiesCreated: {ActivitiesCreated}, ActivitiesUpdated: {ActivitiesUpdated}, PayloadsStored: {PayloadsStored}, TotalErrors: {TotalErrors}.",
+                enabledSources.Count,
+                totalProcessed,
+                totalCreated,
+                totalUpdated,
+                totalPayloads,
+                totalErrors);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
