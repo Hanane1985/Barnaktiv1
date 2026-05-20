@@ -35,6 +35,7 @@ jobs:
                 echo "Running ingestion source: $SOURCE_KEY"
                 curl --fail-with-body --show-error --silent \
                   --request POST \
+                  --data '' \
                   --max-time 540 \
                   --header "$BARNAKTIV_ADMIN_HEADER_NAME: $BARNAKTIV_ADMIN_API_KEY" \
                   "${BARNAKTIV_API_BASE_URL%/}/api/admin/ingestion/run/$SOURCE_KEY"
