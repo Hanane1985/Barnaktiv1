@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: production-ingestion
+  cancel-in-progress: false
+
 jobs:
   run-ingestion:
     name: Run production ingestion
