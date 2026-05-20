@@ -13,6 +13,7 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
 {
     private const string Organizer = "IFK G\u00f6teborg";
     private const string City = "G\u00f6teborg";
+    private const int DetailRequestConcurrency = 8;
 
     private static readonly Regex GroupRowRegex = new(
         "<div class='grupplist-row' id='grupp(?<id>\\d+)'.*?<h4>(?<title>.*?)</h4>.*?<div class=\"resp-small-label\">\u00c5lder:</div>\\s*(?<age>.*?)\\s*</div>.*?<div class=\"resp-small-label\">Plats:</div>\\s*(?<place>.*?)\\s*</div>.*?<div class=\"resp-small-label\">\u00d6ppnas:</div>\\s*(?<open>.*?)\\s*</div>.*?<div class=\"grupplist-statusbox [^\"]+\">\\s*(?<status>.*?)\\s*</div>.*?(?:(?<spots>\\d+)\\s+platser\\s+kvar)?",
@@ -65,6 +66,7 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
         var groupsUrl = $"https://sportadmin.se/book/loadGroups.asp?F={formId}";
         var groupsHtml = await GetHtmlAsync(groupsUrl, cancellationToken);
         var sectionMatches = SectionTitleRegex.Matches(groupsHtml);
+        var summaries = new List<GroupSummary>();
         var items = new List<ScrapedActivityItem>();
         var errors = new List<string>();
 
@@ -76,11 +78,61 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
             {
                 continue;
             }
+            summaries.Add(summary);
+        }
 
-            var detailUrl = $"https://sportadmin.se/book/?F={formId}&grupp={summary.GroupId}";
-            var detailContentUrl =
-                $"https://sportadmin.se/book/bookPageController_paymentservice.asp?F={formId}&grupp={summary.GroupId}&subaction=";
+        using var detailSemaphore = new SemaphoreSlim(DetailRequestConcurrency);
+        var processedGroups = await Task.WhenAll(
+            summaries.Select(summary =>
+                ProcessGroupAsync(
+                    source,
+                    formId,
+                    groupsUrl,
+                    summary,
+                    detailSemaphore,
+                    cancellationToken)));
 
+        foreach (var processedGroup in processedGroups)
+        {
+            if (processedGroup.Item is not null)
+            {
+                items.Add(processedGroup.Item);
+            }
+
+            if (processedGroup.Errors.Count > 0)
+            {
+                errors.AddRange(processedGroup.Errors);
+            }
+        }
+
+        if (items.Count == 0)
+        {
+            errors.Add("No public child-targeted SportAdmin activities could be parsed from the IFK G\u00f6teborg booking page.");
+        }
+
+        return new ScrapeResult(
+            items,
+            errors,
+            items.Select(item => item.ExternalId).ToList(),
+            items.Count > 0);
+    }
+
+    private async Task<ProcessedGroupResult> ProcessGroupAsync(
+        ConfiguredIngestionSource source,
+        string formId,
+        string groupsUrl,
+        GroupSummary summary,
+        SemaphoreSlim detailSemaphore,
+        CancellationToken cancellationToken)
+    {
+        var detailUrl = $"https://sportadmin.se/book/?F={formId}&grupp={summary.GroupId}";
+        var detailContentUrl =
+            $"https://sportadmin.se/book/bookPageController_paymentservice.asp?F={formId}&grupp={summary.GroupId}&subaction=";
+
+        await detailSemaphore.WaitAsync(cancellationToken);
+
+        try
+        {
             GroupDetail detail;
 
             try
@@ -90,13 +142,14 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
             }
             catch (Exception exception)
             {
-                errors.Add($"Group '{summary.GroupId}' could not be fetched: {exception.Message}");
-                continue;
+                return new ProcessedGroupResult(
+                    null,
+                    [$"Group '{summary.GroupId}' could not be fetched: {exception.Message}"]);
             }
 
             if (!IsAllowedPublicActivity(summary, detail))
             {
-                continue;
+                return ProcessedGroupResult.Empty;
             }
 
             var activityDate = detail.StartDate ?? DateTime.Today;
@@ -104,7 +157,7 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
 
             if (ageRange is null || ageRange.Value.AgeTo > 19)
             {
-                continue;
+                return ProcessedGroupResult.Empty;
             }
 
             var registrationOpenAt = TryParseOpenAt(summary.OpenText, activityDate.Year);
@@ -120,40 +173,35 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
             var title = string.IsNullOrWhiteSpace(detail.Title) ? summary.Title : detail.Title;
             var category = ResolveCategory(summary.SectionTitle, title);
 
-            items.Add(new ScrapedActivityItem(
-                $"ifk-goteborg-sportadmin-{summary.GroupId}",
-                title,
-                description,
-                Organizer,
-                location,
-                City,
-                ageRange.Value.AgeFrom,
-                ageRange.Value.AgeTo,
-                category,
-                activityDate,
-                price,
-                detailUrl,
-                string.Empty,
-                CreateRawPayload(source.EndpointUrl, groupsUrl, detailUrl, summary, detail, registrationStatus),
-                false,
-                "Fotboll",
-                ActivityListingType.Program,
-                registrationStatus,
-                registrationOpenAt,
-                registrationCloseAt,
-                detailUrl));
+            return new ProcessedGroupResult(
+                new ScrapedActivityItem(
+                    $"ifk-goteborg-sportadmin-{summary.GroupId}",
+                    title,
+                    description,
+                    Organizer,
+                    location,
+                    City,
+                    ageRange.Value.AgeFrom,
+                    ageRange.Value.AgeTo,
+                    category,
+                    activityDate,
+                    price,
+                    detailUrl,
+                    string.Empty,
+                    CreateRawPayload(source.EndpointUrl, groupsUrl, detailUrl, summary, detail, registrationStatus),
+                    false,
+                    "Fotboll",
+                    ActivityListingType.Program,
+                    registrationStatus,
+                    registrationOpenAt,
+                    registrationCloseAt,
+                    detailUrl),
+                []);
         }
-
-        if (items.Count == 0)
+        finally
         {
-            errors.Add("No public child-targeted SportAdmin activities could be parsed from the IFK G\u00f6teborg booking page.");
+            detailSemaphore.Release();
         }
-
-        return new ScrapeResult(
-            items,
-            errors,
-            items.Select(item => item.ExternalId).ToList(),
-            items.Count > 0);
     }
 
     private async Task<string> ResolveFormIdAsync(string endpointUrl, CancellationToken cancellationToken)
@@ -612,4 +660,11 @@ public sealed class IfkGoteborgSportAdminBookingScraper(HttpClient httpClient) :
         DateTime? StartDate,
         DateTime? CloseAt,
         decimal? Price);
+
+    private sealed record ProcessedGroupResult(
+        ScrapedActivityItem? Item,
+        IReadOnlyList<string> Errors)
+    {
+        public static ProcessedGroupResult Empty { get; } = new(null, []);
+    }
 }
