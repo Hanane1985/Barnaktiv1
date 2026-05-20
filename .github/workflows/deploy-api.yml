@@ -49,11 +49,18 @@ jobs:
       # Must not use --no-build here: the Release build above is Any CPU; win-x86 needs its
       # own restore graph (NETSDK1047 if assets lack net9.0/win-x86).
       - name: Publish API (win-x86 for MonsterASP)
-        run: >
-          dotnet publish backend/Barnaktiv.API/Barnaktiv.API.csproj
-          --configuration Release
-          --output ./publish
-          --runtime win-x86
+        shell: pwsh
+        run: |
+          $publish = Join-Path $env:GITHUB_WORKSPACE 'publish'
+          dotnet publish backend/Barnaktiv.API/Barnaktiv.API.csproj `
+            --configuration Release `
+            --output $publish `
+            --runtime win-x86
+          if (-not (Test-Path (Join-Path $publish 'Barnaktiv.API.dll'))) {
+            throw "Publish output missing Barnaktiv.API.dll in $publish"
+          }
+          Write-Host "Publish output (first 20 files):"
+          Get-ChildItem $publish | Select-Object -First 20 | Format-Table Name, Length
 
       - name: Deploy to MonsterASP.NET
         uses: rasmusbuchholdt/simply-web-deploy@2.2.0
@@ -62,4 +69,5 @@ jobs:
           server-computer-name: ${{ secrets.SERVER_COMPUTER_NAME }}
           server-username: ${{ secrets.SERVER_USERNAME }}
           server-password: ${{ secrets.SERVER_PASSWORD }}
-          source-path: "./publish/"
+          # MSDeploy on Windows does not resolve "./publish/" (FileOrFolderNotFound).
+          source-path: '${{ github.workspace }}\publish\'
