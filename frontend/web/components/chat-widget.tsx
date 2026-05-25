@@ -102,6 +102,15 @@ export function ChatWidget() {
     }
   }
 
+  function resetChat() {
+    if (isLoading) {
+      return;
+    }
+    setMessages([]);
+    setInput("");
+    textareaRef.current?.focus();
+  }
+
   return (
     <>
       <button
@@ -159,25 +168,52 @@ export function ChatWidget() {
                 Fråga om barnaktiviteter
               </h2>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              aria-label="Stäng chatten"
-              className="rounded-full p-1.5 text-[color:var(--muted)] transition hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--foreground)]"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-4 w-4"
-                aria-hidden
+            <div className="flex items-center gap-1">
+              {messages.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={resetChat}
+                  disabled={isLoading}
+                  aria-label="Starta ny chatt"
+                  title="Starta ny chatt"
+                  className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[color:var(--muted)] transition hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-3.5 w-3.5"
+                    aria-hidden
+                  >
+                    <path d="M3 12a9 9 0 1 0 3-6.7" />
+                    <path d="M3 4v5h5" />
+                  </svg>
+                  Ny chatt
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                aria-label="Stäng chatten"
+                className="rounded-full p-1.5 text-[color:var(--muted)] transition hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--foreground)]"
               >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-4 w-4"
+                  aria-hidden
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </header>
 
           <div className="flex-1 overflow-y-auto px-3 py-3 sm:px-4">
