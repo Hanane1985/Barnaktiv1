@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 
+import { ChatWidget } from "@/components/chat-widget";
+
 import "./globals.css";
 
 const themeInitScript = `(function(){try{var t=localStorage.getItem("barnaktiv-theme");if(t==="dark")document.documentElement.setAttribute("data-theme","dark");else if(t==="light")document.documentElement.setAttribute("data-theme","light");}catch(e){}})();`;
@@ -23,6 +25,7 @@ export default function RootLayout({
           {themeInitScript}
         </Script>
         {children}
+        <ChatWidget />
       </body>
     </html>
   );
