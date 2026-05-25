@@ -112,8 +112,22 @@ export function ActivityExplorer({
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const deferredSearch = useDeferredValue(search);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const inflightQueriesRef = useRef<Set<string>>(new Set());
+  const isInitialMountRef = useRef(true);
 
   useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+
+    const incomingQueryString = buildActivityRouteSearchParams(initialFilters).toString();
+
+    if (inflightQueriesRef.current.has(incomingQueryString)) {
+      inflightQueriesRef.current.delete(incomingQueryString);
+      return;
+    }
+
     setSearch(initialFilters.search);
     setSelectedCity(initialFilters.city);
     setSelectedOrganizer(initialFilters.organizer);
@@ -140,6 +154,8 @@ export function ActivityExplorer({
     if (nextQueryString === currentQueryString) {
       return;
     }
+
+    inflightQueriesRef.current.add(nextQueryString);
 
     startTransition(() => {
       router.replace(
