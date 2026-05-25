@@ -20,6 +20,7 @@ Set these values in your hosting environment or local user secrets:
 - `AdminApiKey__ApiKey`
 - `AdminApiKey__HeaderName`
 - `Cors__AllowedOrigins__0` when browser clients call the API directly.
+- `Ai__*` when AI endpoints are enabled (see [docs/ai-assistant.md](../docs/ai-assistant.md)).
 
 See `.env.example` for a complete example. The `.env.example` file is documentation only; .NET does not load it automatically.
 
@@ -46,5 +47,6 @@ dotnet ef database update --project Barnaktiv.Infrastructure --startup-project B
 
 - `GET /health` verifies that the API process is alive.
 - `GET /api/activities` returns public activities.
+- `POST /api/ai/ask` returns AI assistant answers when `Ai:Enabled` and `Ai:ApiKey` are configured.
 - `POST /api/admin/ingestion/run` triggers ingestion and requires the configured admin API key header.
 - `Barnaktiv.Worker` must be running continuously in staging/production to keep activities fresh for users.

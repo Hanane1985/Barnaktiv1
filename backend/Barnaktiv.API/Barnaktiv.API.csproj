@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Barnaktiv.API</RootNamespace>
+    <UserSecretsId>barnaktiv-api-ai-dev</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

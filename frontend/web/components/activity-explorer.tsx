@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   useDeferredValue,
@@ -327,6 +328,9 @@ export function ActivityExplorer({
                 <a href="#aktiviteter" className="btn-ghost inline-flex px-6 py-2.5">
                   Se alla aktiviteter
                 </a>
+                <Link href="/assistent" className="btn-ghost inline-flex px-6 py-2.5">
+                  Fråga assistenten
+                </Link>
               </div>
             </div>
 

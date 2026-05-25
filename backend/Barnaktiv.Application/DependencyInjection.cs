@@ -11,6 +11,7 @@ public static class DependencyInjection
         services.AddSingleton<IActivityIngestionExecutionGate, ActivityIngestionExecutionGate>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IActivityIngestionService, ActivityIngestionService>();
+        services.AddScoped<IActivityAiService, ActivityAiService>();
         return services;
     }
 }

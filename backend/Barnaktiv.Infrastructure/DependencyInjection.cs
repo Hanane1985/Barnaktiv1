@@ -1,4 +1,5 @@
 using Barnaktiv.Application.Interfaces;
+using Barnaktiv.Infrastructure.Ai;
 using Barnaktiv.Infrastructure.Configuration;
 using Barnaktiv.Infrastructure.Data;
 using Barnaktiv.Infrastructure.Repositories;
@@ -20,6 +21,11 @@ public static class DependencyInjection
             options.UseSqlServer(connectionString));
 
         services.AddSingleton(new HttpClient());
+        services.AddHttpClient<OpenAiChatClient>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
+        services.AddScoped<IAiChatClient>(sp => sp.GetRequiredService<OpenAiChatClient>());
         services.AddScoped<IActivityRepository, ActivityRepository>();
         services.AddScoped<IActivityIngestionRepository, ActivityIngestionRepository>();
         services.AddSingleton<IIngestionSourceProvider, IngestionSourceProvider>();

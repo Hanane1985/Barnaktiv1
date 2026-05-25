@@ -30,6 +30,12 @@ export function SiteHeader() {
             >
               Aktiviteter
             </a>
+            <Link
+              href="/assistent"
+              className="rounded-full px-3 py-2 transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
+            >
+              Assistent
+            </Link>
           </nav>
           <ThemeToggle />
         </div>

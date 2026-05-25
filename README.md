@@ -73,6 +73,8 @@ Frontend examples are in `frontend/web/.env.example`:
 
 For local .NET development, prefer user secrets or environment variables when your SQL Server differs from the default development connection string.
 
+AI assistant configuration (phased rollout) is documented in [docs/ai-assistant.md](docs/ai-assistant.md). AI is off by default until `Ai:Enabled` and `Ai:ApiKey` are set.
+
 ## Database
 
 Apply migrations before starting the API or worker against a new database:

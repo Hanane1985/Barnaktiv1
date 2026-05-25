@@ -22,6 +22,18 @@ AdminApiKey__ApiKey=<long-random-secret>
 Cors__AllowedOrigins__0=https://www.barnaktiv.se
 ```
 
+When the AI assistant is deployed (see [ai-assistant.md](ai-assistant.md)), add:
+
+```text
+Ai__Enabled=true
+Ai__Provider=OpenAI
+Ai__ApiKey=<openai-or-azure-openai-key>
+Ai__ChatModel=gpt-4o-mini
+Ai__MaxRequestsPerMinute=10
+```
+
+Leave `Ai__Enabled=false` until fas 1 is ready; the API starts without an AI key when AI is disabled.
+
 Deploy `backend/Barnaktiv.API` as the web application.
 
 ### Automatic deploy (GitHub Actions)

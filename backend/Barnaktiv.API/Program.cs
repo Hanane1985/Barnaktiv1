@@ -1,8 +1,12 @@
+using System.Threading.RateLimiting;
 using Barnaktiv.API.Auth;
+using Barnaktiv.API.Controllers;
 using Barnaktiv.API.Services;
 using Barnaktiv.Application;
+using Barnaktiv.Application.Options;
 using Barnaktiv.Infrastructure;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +23,24 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
+builder.Services.AddRateLimiter(rateLimiterOptions =>
+{
+    rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiterOptions.AddPolicy(AiController.RateLimitPolicyName, httpContext =>
+    {
+        var maxRequests = builder.Configuration.GetValue<int?>("Ai:MaxRequestsPerMinute") ?? 10;
+        var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = maxRequests,
+                Window = TimeSpan.FromMinutes(1),
+                AutoReplenishment = true,
+            });
+    });
+});
 if (corsAllowedOrigins.Length > 0)
 {
     builder.Services.AddCors(options =>
@@ -32,6 +54,19 @@ if (corsAllowedOrigins.Length > 0)
         });
     });
 }
+builder.Services
+    .AddOptions<AiOptions>()
+    .BindConfiguration(AiOptions.SectionName)
+    .Validate(
+        options => !options.Enabled || !string.IsNullOrWhiteSpace(options.ApiKey),
+        "Ai:ApiKey must be configured when Ai:Enabled is true.")
+    .Validate(
+        options => options.MaxRequestsPerMinute > 0,
+        "Ai:MaxRequestsPerMinute must be greater than zero.")
+    .Validate(
+        options => options.MaxQuestionLength is > 0 and <= 4000,
+        "Ai:MaxQuestionLength must be between 1 and 4000.")
+    .ValidateOnStart();
 builder.Services
     .AddOptions<AdminApiKeyOptions>()
     .BindConfiguration(AdminApiKeyOptions.SectionName)
@@ -90,6 +125,7 @@ if (corsAllowedOrigins.Length > 0)
 }
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapHealthChecks("/health")
     .AllowAnonymous();
