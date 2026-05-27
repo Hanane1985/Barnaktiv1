@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Barnaktiv.Application\Barnaktiv.Application.csproj" />
     <ProjectReference Include="..\Barnaktiv.Domain\Barnaktiv.Domain.csproj" />
   </ItemGroup>
 
