@@ -25,8 +25,14 @@ public static class DependencyInjection
         {
             client.Timeout = TimeSpan.FromSeconds(60);
         });
+        services.AddHttpClient<OpenAiEmbeddingClient>(client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(60);
+        });
         services.AddScoped<IAiChatClient>(sp => sp.GetRequiredService<OpenAiChatClient>());
+        services.AddScoped<IAiEmbeddingClient>(sp => sp.GetRequiredService<OpenAiEmbeddingClient>());
         services.AddScoped<IActivityRepository, ActivityRepository>();
+        services.AddScoped<IActivityEmbeddingRepository, ActivityEmbeddingRepository>();
         services.AddScoped<IActivityIngestionRepository, ActivityIngestionRepository>();
         services.AddSingleton<IIngestionSourceProvider, IngestionSourceProvider>();
         services.AddScoped<IActivityScraper, JsonFeedActivityScraper>();

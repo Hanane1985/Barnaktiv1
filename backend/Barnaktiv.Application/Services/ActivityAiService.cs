@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,10 +15,13 @@ namespace Barnaktiv.Application.Services;
 public sealed class ActivityAiService(
     IActivityService activityService,
     IAiChatClient chatClient,
+    IAiEmbeddingClient embeddingClient,
+    IActivityEmbeddingRepository embeddingRepository,
     IOptions<AiOptions> options,
     ILogger<ActivityAiService> logger) : IActivityAiService
 {
     private const int ActivityContextLimit = 15;
+    private const int SemanticCandidateLimit = 120;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -40,7 +44,12 @@ public sealed class ActivityAiService(
         query.Take = ActivityContextLimit;
         query.Skip = 0;
 
-        var activities = await activityService.GetAllAsync(query, cancellationToken);
+        var lexicalActivities = await activityService.GetAllAsync(query, cancellationToken);
+        var activities = await RankActivitiesSemanticallyAsync(
+            trimmedQuestion,
+            query,
+            lexicalActivities,
+            cancellationToken);
 
         if (activities.Count == 0)
         {
@@ -65,6 +74,90 @@ public sealed class ActivityAiService(
             trimmedQuestion.Length);
 
         return new AskResponseDto(answer, sources);
+    }
+
+    private async Task<IReadOnlyList<ActivityDto>> RankActivitiesSemanticallyAsync(
+        string question,
+        ActivityQueryDto query,
+        IReadOnlyList<ActivityDto> lexicalActivities,
+        CancellationToken cancellationToken)
+    {
+        var candidateQuery = new ActivityQueryDto
+        {
+            Search = null,
+            City = query.City,
+            Sport = query.Sport,
+            Category = query.Category,
+            MinAge = query.MinAge,
+            MaxAge = query.MaxAge,
+            Price = query.Price,
+            Sort = "date-asc",
+            Skip = 0,
+            Take = SemanticCandidateLimit,
+        };
+
+        var candidates = await activityService.GetAllAsync(candidateQuery, cancellationToken);
+        if (candidates.Count == 0)
+        {
+            return lexicalActivities;
+        }
+
+        var embeddingTextByActivityId = candidates.ToDictionary(
+            candidate => candidate.Id,
+            BuildEmbeddingText);
+        var currentHashByActivityId = embeddingTextByActivityId.ToDictionary(
+            pair => pair.Key,
+            pair => ComputeSha256(pair.Value));
+        var existingEmbeddings = new Dictionary<Guid, StoredActivityEmbedding>(
+            await embeddingRepository.GetByActivityIdsAsync(
+                candidates.Select(candidate => candidate.Id).ToArray(),
+                cancellationToken));
+        var missingOrStale = candidates
+            .Where(candidate =>
+                !existingEmbeddings.TryGetValue(candidate.Id, out var stored) ||
+                !string.Equals(stored.ContentHash, currentHashByActivityId[candidate.Id], StringComparison.Ordinal))
+            .ToList();
+
+        if (missingOrStale.Count > 0)
+        {
+            var vectors = await embeddingClient.CreateEmbeddingsAsync(
+                missingOrStale.Select(candidate => embeddingTextByActivityId[candidate.Id]).ToList(),
+                cancellationToken);
+            var upserts = missingOrStale
+                .Select((candidate, index) => new ActivityEmbeddingUpsertItem(
+                    candidate.Id,
+                    currentHashByActivityId[candidate.Id],
+                    vectors[index]))
+                .ToList();
+            await embeddingRepository.UpsertAsync(upserts, cancellationToken);
+
+            foreach (var upsert in upserts)
+            {
+                existingEmbeddings[upsert.ActivityId] = new StoredActivityEmbedding(
+                    upsert.ActivityId,
+                    upsert.ContentHash,
+                    upsert.Vector);
+            }
+        }
+
+        var questionVector = (await embeddingClient.CreateEmbeddingsAsync([question], cancellationToken))[0];
+        var ranked = candidates
+            .Select(candidate => new
+            {
+                Activity = candidate,
+                Score = existingEmbeddings.TryGetValue(candidate.Id, out var stored)
+                    ? CosineSimilarity(questionVector, stored.Vector)
+                    : double.NegativeInfinity,
+            })
+            .Where(item => !double.IsNaN(item.Score) && !double.IsNegativeInfinity(item.Score))
+            .OrderByDescending(item => item.Score)
+            .Take(ActivityContextLimit)
+            .Select(item => item.Activity)
+            .ToList();
+
+        return ranked.Count > 0
+            ? ranked
+            : lexicalActivities;
     }
 
     private async Task<ActivityQueryDto> ParseQueryAsync(
@@ -181,6 +274,53 @@ public sealed class ActivityAiService(
         }
 
         return null;
+    }
+
+    private static string BuildEmbeddingText(ActivityDto activity)
+    {
+        return string.Join(
+            "\n",
+            $"Titel: {activity.Title}",
+            $"Beskrivning: {activity.Description}",
+            $"Stad: {activity.City}",
+            $"Sport: {activity.Sport}",
+            $"Kategori: {activity.Category}",
+            $"Alder: {activity.AgeFrom}-{activity.AgeTo}",
+            $"Pris: {activity.Price}",
+            $"Plats: {activity.Location}");
+    }
+
+    private static string ComputeSha256(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(bytes);
+    }
+
+    private static double CosineSimilarity(float[] left, float[] right)
+    {
+        if (left.Length == 0 || right.Length == 0 || left.Length != right.Length)
+        {
+            return double.NegativeInfinity;
+        }
+
+        double dot = 0;
+        double leftNorm = 0;
+        double rightNorm = 0;
+        for (var index = 0; index < left.Length; index++)
+        {
+            var a = left[index];
+            var b = right[index];
+            dot += a * b;
+            leftNorm += a * a;
+            rightNorm += b * b;
+        }
+
+        if (leftNorm <= 0 || rightNorm <= 0)
+        {
+            return double.NegativeInfinity;
+        }
+
+        return dot / (Math.Sqrt(leftNorm) * Math.Sqrt(rightNorm));
     }
 
     private sealed class ParsedActivityAiQuery

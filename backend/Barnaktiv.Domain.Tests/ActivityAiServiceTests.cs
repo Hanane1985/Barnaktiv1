@@ -42,11 +42,15 @@ public sealed class ActivityAiServiceTests
         var chatClient = new QueueAiChatClient(
             """{"search":"fotboll","city":"Göteborg"}""",
             """{"answer":"Här är en aktivitet som passar."}""");
+        var embeddingClient = new StubEmbeddingClient();
+        var embeddingRepository = new InMemoryEmbeddingRepository();
         var aiOptions = Options.Create(new AiOptions { MaxQuestionLength = 500 });
 
         var sut = new ActivityAiService(
             activityService,
             chatClient,
+            embeddingClient,
+            embeddingRepository,
             aiOptions,
             NullLogger<ActivityAiService>.Instance);
 
@@ -57,21 +61,23 @@ public sealed class ActivityAiServiceTests
         Assert.Equal("Fotbollsskola", source.Title);
         Assert.Equal("https://example.com/signup", source.SignupUrl);
         Assert.Equal("Göteborg", source.City);
-        Assert.Equal("date-asc", activityService.LastQuery?.Sort);
-        Assert.Equal(15, activityService.LastQuery?.Take);
-        Assert.Equal(0, activityService.LastQuery?.Skip);
+        Assert.Contains(activityService.Queries, query => query.Take == 15 && query.Skip == 0);
+        Assert.Contains(activityService.Queries, query => query.Take == 120 && query.Search is null);
+        Assert.All(activityService.Queries, query => Assert.Equal("date-asc", query.Sort));
         Assert.All(chatClient.Calls, call => Assert.True(call.JsonObjectResponse));
+        Assert.Equal(2, embeddingClient.CallCount);
+        Assert.Single(embeddingRepository.StoredVectors);
     }
 
     private sealed class StubActivityService(IReadOnlyList<ActivityDto> activities) : IActivityService
     {
-        public ActivityQueryDto? LastQuery { get; private set; }
+        public List<ActivityQueryDto> Queries { get; } = [];
 
         public Task<IReadOnlyList<ActivityDto>> GetAllAsync(
             ActivityQueryDto query,
             CancellationToken cancellationToken)
         {
-            LastQuery = query;
+            Queries.Add(query);
             return Task.FromResult(activities);
         }
     }
@@ -95,6 +101,52 @@ public sealed class ActivityAiServiceTests
             }
 
             return Task.FromResult(responsesQueue.Dequeue());
+        }
+    }
+
+    private sealed class StubEmbeddingClient : IAiEmbeddingClient
+    {
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<float[]>> CreateEmbeddingsAsync(
+            IReadOnlyList<string> inputs,
+            CancellationToken cancellationToken)
+        {
+            CallCount++;
+            IReadOnlyList<float[]> vectors = inputs
+                .Select(_ => new float[] { 1f, 0f, 0.5f })
+                .ToList();
+            return Task.FromResult(vectors);
+        }
+    }
+
+    private sealed class InMemoryEmbeddingRepository : IActivityEmbeddingRepository
+    {
+        public Dictionary<Guid, StoredActivityEmbedding> StoredVectors { get; } = [];
+
+        public Task<IReadOnlyDictionary<Guid, StoredActivityEmbedding>> GetByActivityIdsAsync(
+            IReadOnlyCollection<Guid> activityIds,
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyDictionary<Guid, StoredActivityEmbedding> result = StoredVectors
+                .Where(entry => activityIds.Contains(entry.Key))
+                .ToDictionary(entry => entry.Key, entry => entry.Value);
+            return Task.FromResult(result);
+        }
+
+        public Task UpsertAsync(
+            IReadOnlyList<ActivityEmbeddingUpsertItem> items,
+            CancellationToken cancellationToken)
+        {
+            foreach (var item in items)
+            {
+                StoredVectors[item.ActivityId] = new StoredActivityEmbedding(
+                    item.ActivityId,
+                    item.ContentHash,
+                    item.Vector);
+            }
+
+            return Task.CompletedTask;
         }
     }
 }

@@ -7,6 +7,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<Activity> Activities => Set<Activity>();
 
+    public DbSet<ActivityEmbedding> ActivityEmbeddings => Set<ActivityEmbedding>();
+
     public DbSet<RawActivityPayload> RawActivityPayloads => Set<RawActivityPayload>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -57,6 +59,23 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 rawPayload.ExternalId,
                 rawPayload.ContentHash
             });
+        });
+
+        modelBuilder.Entity<ActivityEmbedding>(builder =>
+        {
+            builder.Property(embedding => embedding.ContentHash)
+                .HasMaxLength(64);
+
+            builder.Property(embedding => embedding.VectorJson)
+                .HasColumnType("nvarchar(max)");
+
+            builder.HasIndex(embedding => embedding.ActivityId)
+                .IsUnique();
+
+            builder.HasOne(embedding => embedding.Activity)
+                .WithMany()
+                .HasForeignKey(embedding => embedding.ActivityId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
